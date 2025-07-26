@@ -40,8 +40,7 @@ class ImpostorGameService:
         game_id = str(uuid.uuid4())
         
         if not self.game_master_data:
-            # Fallback to original logic if game-master.json not available
-            return self._create_fallback_game(game_id, num_players)
+            raise FileNotFoundError("game-master.json is required but not available. Cannot create game without scenario data.")
         
         # Create agents based on game-master.json initial state
         first_step = self.game_master_data[0]
@@ -103,62 +102,6 @@ class ImpostorGameService:
             message=f"EMERGENCY MEETING! {meeting_reason}",
             agents=agents,
             impostor_revealed=f"The impostor is: {agents[impostor_id].name} ({agents[impostor_id].color})" if impostor_id is not None else "Unknown impostor",
-            meeting_trigger=meeting_trigger,
-            reporter_name=agents[reporter_id].name,
-            meeting_reason=meeting_reason
-        )
-    
-    def _create_fallback_game(self, game_id: str, num_players: int) -> InitGameResponse:
-        """Fallback game creation when game-master.json is not available"""
-        # Among Us style names and colors
-        crewmates_data = [
-            ("Red", "red"), ("Blue", "blue"), ("Green", "green"), ("Pink", "pink"),
-            ("Orange", "orange"), ("Yellow", "yellow"), ("Black", "black"), ("White", "white")
-        ]
-        
-        # Limit to requested number of players
-        selected_data = crewmates_data[:num_players]
-        agents = []
-        
-        for i, (name, color) in enumerate(selected_data):
-            agents.append(Agent(id=i, name=name, color=color, is_impostor=False))
-        
-        impostor_id = random.randint(0, num_players - 1)
-        agents[impostor_id].is_impostor = True
-        
-        # Choose random meeting trigger and reporter
-        meeting_trigger = random.choice([MeetingTrigger.DEAD_BODY, MeetingTrigger.EMERGENCY_BUTTON])
-        reporter_id = random.randint(0, num_players - 1)
-        
-        if meeting_trigger == MeetingTrigger.DEAD_BODY:
-            dead_colors = ["Purple", "Brown", "Cyan", "Lime"]  # Colors not in game
-            dead_color = random.choice(dead_colors)
-            meeting_reason = f"{agents[reporter_id].name} found {dead_color}'s body in {'Electrical' if random.random() > 0.5 else 'Medbay'}"
-        else:
-            meeting_reason = f"{agents[reporter_id].name} pressed the emergency button"
-        
-        game_state = GameState(
-            game_id=game_id,
-            status=GameStatus.ACTIVE,
-            phase=GamePhase.ACTIVE,
-            step_number=1,
-            max_steps=30,
-            agents=agents,
-            public_action_history=[],
-            private_thoughts={},
-            impostor_id=impostor_id,
-            meeting_trigger=meeting_trigger,
-            reporter_id=reporter_id,
-            meeting_reason=meeting_reason
-        )
-        
-        self.games[game_id] = game_state
-        
-        return InitGameResponse(
-            game_id=game_id,
-            message=f"EMERGENCY MEETING! {meeting_reason}",
-            agents=agents,
-            impostor_revealed=f"The impostor is: {agents[impostor_id].name} ({agents[impostor_id].color})",
             meeting_trigger=meeting_trigger,
             reporter_name=agents[reporter_id].name,
             meeting_reason=meeting_reason
