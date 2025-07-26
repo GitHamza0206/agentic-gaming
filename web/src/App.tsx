@@ -292,9 +292,10 @@ const AmongUsSimulation = () => {
                         x2={pos2.x + 10 + offset2}
                         y2={pos2.y + 10}
                         stroke="#00ff00"
-                        strokeWidth="2"
+                        strokeWidth="4"
                         strokeDasharray="5,5"
-                        opacity="0.7"
+                        opacity="0.8"
+                        className="transition-all duration-1000"
                       />
                     </svg>
                   );
