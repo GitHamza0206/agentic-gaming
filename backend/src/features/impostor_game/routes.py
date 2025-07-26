@@ -25,12 +25,16 @@ async def game_step(game_id: str):
     Fait progresser le jeu d'une étape.
     Alterne entre phases de discussion et de vote.
     """
-    result = await game_service.step_game(game_id)
-    
-    if not result:
-        raise HTTPException(status_code=404, detail="Jeu non trouvé")
-    
-    return result
+    try:
+        result = await game_service.step_game(game_id)
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Jeu non trouvé")
+        
+        return result
+    except Exception as e:
+        print(f"Error in game_step: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du traitement de l'étape: {str(e)}")
 
 @router.get("/game/{game_id}", response_model=GameStateResponse)
 async def get_game_state(game_id: str):
@@ -43,6 +47,30 @@ async def get_game_state(game_id: str):
         raise HTTPException(status_code=404, detail="Jeu non trouvé")
     
     return result
+
+@router.get("/debug/{game_id}")
+async def debug_game(game_id: str):
+    """
+    Debug endpoint to check game state
+    """
+    game = game_service.get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    alive_agents = [a for a in game.agents if a.is_alive]
+    
+    return {
+        "game_id": game_id,
+        "step_number": game.step_number,
+        "max_steps": game.max_steps,
+        "status": game.status,
+        "phase": game.phase,
+        "alive_agents": len(alive_agents),
+        "total_agents": len(game.agents),
+        "votes": game.current_votes,
+        "winner": game.winner,
+        "can_continue": game.status == "active" and game.step_number < game.max_steps
+    }
 
 @router.get("/health")
 async def health_check():

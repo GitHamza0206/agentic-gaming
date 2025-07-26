@@ -35,13 +35,19 @@ class LLMClient:
             if not conversation_messages:
                 conversation_messages = [{"role": "user", "content": "Continue the conversation."}]
             
-            response = await self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system_message if system_message else None,
-                messages=conversation_messages
-            )
+            # Create the request parameters
+            request_params = {
+                "model": "claude-3-5-sonnet-20241022",
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": conversation_messages
+            }
+            
+            # Only add system if we have a system message
+            if system_message:
+                request_params["system"] = system_message
+            
+            response = await self.client.messages.create(**request_params)
             
             return response.content[0].text.strip()
         except Exception as e:

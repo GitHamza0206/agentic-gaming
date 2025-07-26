@@ -193,23 +193,51 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
                 temperature=0.3
             )
             
-            # Find matching agent by name
-            chosen_name = response.strip().strip('"')
+            print(f"DEBUG - Raw LLM response for speaker selection: '{response}'")
+            
+            # Check if response contains error
+            if "Erreur de génération" in response or "Error code" in response:
+                print(f"DEBUG - LLM returned error: {response}")
+                raise Exception(f"LLM error: {response}")
+            
+            # Find matching agent by name or ID
+            chosen_name = response.strip().strip('"').strip()
+            print(f"DEBUG - Cleaned chosen name: '{chosen_name}'")
+            
             for turn in candidate_turns:
-                agent_name = next((agent.name for agent in alive_agents if agent.id == turn.agent_id), f"Agent{turn.agent_id}")
-                if agent_name.lower() == chosen_name.lower():
-                    return turn
+                agent = next((agent for agent in alive_agents if agent.id == turn.agent_id), None)
+                if agent:
+                    # Try matching by name (capitalized) or ID (lowercase)
+                    if (chosen_name.lower() == agent.name.lower() or 
+                        chosen_name.lower() == agent.id.lower() or
+                        chosen_name.lower() == agent.color.lower()):
+                        print(f"DEBUG - Found match: {agent.name} (ID: {agent.id}, Color: {agent.color})")
+                        return turn
             
             # Fallback to first candidate if name not found
-            return candidate_turns[0]
+            available_agents = []
+            for turn in candidate_turns:
+                agent = next((agent for agent in alive_agents if agent.id == turn.agent_id), None)
+                if agent:
+                    available_agents.append(f"{agent.name}(id:{agent.id},color:{agent.color})")
+            print(f"DEBUG - LLM chose '{chosen_name}' but no match found. Available: {available_agents}")
+            # Use step-based selection as fallback
+            selected_index = (step_number - 1) % len(candidate_turns)
+            print(f"DEBUG - Using fallback selection: index {selected_index}")
+            return candidate_turns[selected_index]
             
-        except Exception:
-            # Fallback to random selection if LLM fails
-            return random.choice(candidate_turns)
+        except Exception as e:
+            # Fallback to round-robin selection if LLM fails
+            print(f"DEBUG - LLM speaker selection failed: {e}, using step-based selection")
+            # Use step number to rotate through speakers
+            selected_index = (step_number - 1) % len(candidate_turns)
+            return candidate_turns[selected_index]
     
     async def step_game(self, game_id: str) -> Optional[StepResponse]:
+        print(f"DEBUG - Starting step_game for {game_id}")
         game = self.get_game(game_id)
         if not game:
+            print(f"DEBUG - Game {game_id} not found")
             return None
         
         if game.status == GameStatus.FINISHED:
@@ -295,8 +323,14 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
             return turn
         
         # Execute all agent turns in parallel
+        print(f"DEBUG - Processing {len(alive_agents)} agents in parallel for step {game.step_number}")
         tasks = [process_agent(agent_data) for agent_data in alive_agents]
-        step_turns = await asyncio.gather(*tasks)
+        try:
+            step_turns = await asyncio.gather(*tasks)
+            print(f"DEBUG - All {len(step_turns)} agent turns completed successfully")
+        except Exception as e:
+            print(f"DEBUG - Error during parallel agent processing: {e}")
+            raise
         
         # Process all turns - store thinks privately
         for turn in step_turns:
@@ -311,8 +345,13 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
         
         # After all agents have generated their turns, use LLM to intelligently select speaker
         agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
+        print(f"DEBUG - {len(agents_who_want_to_speak)} agents want to speak in step {game.step_number}")
+        
         if agents_who_want_to_speak:
+            print(f"DEBUG - Conversation history has {len(game.public_action_history)} entries")
             chosen_speaker = await self._select_next_speaker(agents_who_want_to_speak, game.public_action_history, alive_agents, game.step_number)
+            chosen_agent_name = next((agent.name for agent in alive_agents if agent.id == chosen_speaker.agent_id), f"Agent{chosen_speaker.agent_id}")
+            print(f"DEBUG - Selected speaker: {chosen_agent_name} (ID: {chosen_speaker.agent_id})")
             
             # Generate TTS audio for the chosen speaker
             speaker_agent = next((a for a in game.agents if a.id == chosen_speaker.agent_id), None)
@@ -387,6 +426,9 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
         
         # Increment step
         game.step_number += 1
+        
+        print(f"DEBUG - Step {game.step_number - 1} completed. Game status: {game.status}, Phase: {game.phase}")
+        print(f"DEBUG - Alive agents: {len(alive_agents)}, Game over: {game_over}")
         
         return StepResponse(
             game_id=game_id,
