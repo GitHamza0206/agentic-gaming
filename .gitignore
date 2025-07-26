@@ -381,8 +381,16 @@ dev/
 backend/.env
 backend/.venv
 backend/.pytest_cache
-backend/.__pycache__
+backend/__pycache__/
+**/__pycache__/
+*.pyc
 
+# Node.js dependencies and lock files
+web/node_modules/
+**/node_modules/
+package-lock.json
+.package-lock.json
 
-
-web/.vite
+# Vite cache and build files
+web/.vite/
+**/.vite/

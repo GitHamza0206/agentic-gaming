@@ -1,10 +1,16 @@
 import os
 from typing import List, Dict
 import anthropic
+from dotenv import load_dotenv
 
 class LLMClient:
     def __init__(self):
+        # Load environment variables
+        load_dotenv()
+        
         api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
         self.client = anthropic.Anthropic(api_key=api_key)
     
     def generate_response(
