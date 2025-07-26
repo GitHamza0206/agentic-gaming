@@ -10,7 +10,7 @@ class Crewmate:
         self.llm_client = llm_client
     
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. An emergency meeting has been called. There is an impostor among you and your goal is to find them before they eliminate everyone. Analyze suspicious behaviors, ask relevant questions, and vote to eliminate the impostor."
+        return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. You are currently in an EMERGENCY MEETING discussing who the impostor is. Someone found a dead body, so now everyone is gathered at the meeting table to debate and vote. Your goal is to find the impostor before they eliminate everyone. Share what you saw, analyze others' stories for inconsistencies, and vote to eliminate the impostor."
     
     async def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
@@ -63,33 +63,26 @@ class Crewmate:
             {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context} \\n{meeting_info}"},
             {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": f"""You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote.
+            {"role": "user", "content": f"""You are currently in an EMERGENCY MEETING at the meeting table discussing who the impostor is. Respond in JSON format for this discussion turn.
 
-Also update your memory with observations, suspicions, and strategy for step {step_number}:
+WHAT YOU WERE DOING BEFORE THE MEETING: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
 
 """ + """{
-  "think": "your private thoughts and analysis (always required, detailed)",
-  "speak": "short public statement to other crewmates (optional, null if you don't speak)",
+  "think": "your private analysis of the situation and other players (always required)",
+  "speak": "what you say to the group about what you observed or your suspicions (optional, null if silent)",
   "vote": agent_ID_number (optional, null if you don't vote),
-  "memory_update": {
-    "step_number": """ + str(step_number) + """,
-    "observations": ["what you noticed this step"],
-    "suspicions": {"agent_id": "reason for suspicion"},
-    "alliances": [agent_IDs_you_trust],
-    "strategy_notes": "your current strategy/plan",
-    "emotion_state": "confident|suspicious|panicked|neutral"
-  }
 }
 
 Examples:
-{"think": "Red seems suspicious based on their defensive behavior", "speak": null, "vote": null}
-{"think": "Blue's story doesn't match", "speak": "Blue, you said you were in electrical", "vote": null}
+{"think": "Red's story doesn't match what I saw - they claim they were alone but I saw them with Blue", "speak": "I was doing navigation tasks and saw Red and Blue together in Electrical", "vote": null}
+{"think": "Yellow's timeline is suspicious, they're probably the impostor", "speak": "Yellow, you said you were in Cafeteria but the body was found in Electrical", "vote": 3}
 
 IMPORTANT: 
-- "think" = your private thoughts (always required)
-- "speak" = public statement (optional, null if silent)  
-- "vote" = agent ID to eliminate (optional, null otherwise)
-- Keep "speak" SHORT and direct
+- This is a DISCUSSION about what happened BEFORE the meeting
+- Share what you observed and analyze others' stories for contradictions
+- "think" = your private analysis (always required)
+- "speak" = what you tell the group (optional)
+- "vote" = agent ID to eliminate (optional)
 - Respond with valid JSON only!"""}
         ]
         
@@ -102,18 +95,10 @@ IMPORTANT:
             return "No previous memories."
         
         memory_lines = []
-        for memory in self.data.memory_history[-3:]:  # Last 3 steps
-            lines = [f"Step {memory.step_number}:"]
-            if memory.observations:
-                lines.append(f"  Observed: {', '.join(memory.observations)}")
-            if memory.suspicions:
-                suspicion_text = ", ".join([f"Agent{aid}: {reason}" for aid, reason in memory.suspicions.items()])
-                lines.append(f"  Suspicions: {suspicion_text}")
-            if memory.alliances:
-                lines.append(f"  Trust: Agent{', Agent'.join(map(str, memory.alliances))}")
-            if memory.strategy_notes:
-                lines.append(f"  Strategy: {memory.strategy_notes}")
-            lines.append(f"  Emotion: {memory.emotion_state}")
+        for memory in self.data.memory_history[-5:]:  # Last 5 steps
+            lines = [f"Step {memory.step_number}: I was in {memory.location} doing '{memory.action}'"]
+            if memory.met:
+                lines.append(f"  Met: {', '.join(memory.met)}")
             memory_lines.extend(lines)
         
         return "\\n".join(memory_lines)
@@ -156,20 +141,13 @@ IMPORTANT:
                     except (ValueError, TypeError):
                         vote = None
                 
-                # Parse memory update if provided
-                memory_update = None
-                if "memory_update" in data and data["memory_update"]:
-                    memory_data = data["memory_update"]
-                    memory_update = AgentMemory(
-                        step_number=memory_data.get("step_number", step_number),
-                        observations=memory_data.get("observations", []),
-                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int)) and str(k).isdigit()},
-                        alliances=memory_data.get("alliances", []),
-                        strategy_notes=memory_data.get("strategy_notes", ""),
-                        emotion_state=memory_data.get("emotion_state", "neutral")
-                    )
-                    # Add to memory for backward compatibility with unit tests
-                    self.data.memory_history.append(memory_update)
+                # Create simple memory update based on current data
+                memory_update = AgentMemory(
+                    step_number=step_number,
+                    location=self.data.location,
+                    action=self.data.action,
+                    met=self.data.met
+                )
 
                 return AgentTurn(
                     agent_id=self.data.id,
@@ -201,11 +179,10 @@ IMPORTANT:
         # Create fallback memory
         default_memory = AgentMemory(
             step_number=step_number,
-            observations=[f"Failed to parse response properly"],
-            emotion_state="confused"
+            location=self.data.location,
+            action=self.data.action,
+            met=self.data.met
         )
-        # Add to memory for backward compatibility with unit tests
-        self.data.memory_history.append(default_memory)
         
         return AgentTurn(
             agent_id=self.data.id,
@@ -217,7 +194,7 @@ IMPORTANT:
 
 class Impostor(Crewmate):
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. An emergency meeting has been called. Your goal is to avoid being discovered. You must act like an innocent crewmate, deny any accusations, and try to redirect suspicion toward others. Be subtle and convincing. NEVER reveal that you are the impostor."
+        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. You are currently in an EMERGENCY MEETING at the meeting table. Someone found a dead body and now everyone is discussing who the impostor is. Your goal is to avoid being discovered and eliminated. Act like an innocent crewmate, provide believable alibis, deflect suspicion toward others, and never reveal that you are the impostor. Be strategic and convincing."
     
     async def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
