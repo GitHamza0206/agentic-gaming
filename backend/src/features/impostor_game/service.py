@@ -1,8 +1,12 @@
 import random
 import uuid
+import json
+import os
 import asyncio
+
 from typing import List, Dict, Optional
 from src.core.llm_client import LLMClient
+from src.core.tts_service import tts_service
 from .schema import (
     Agent, GameState, GameStatus, GamePhase, ActionType, AgentAction, AgentTurn, MeetingTrigger,
     InitGameResponse, StepResponse, GameStateResponse, AgentMemory
@@ -13,6 +17,28 @@ class ImpostorGameService:
     def __init__(self):
         self.games: Dict[str, GameState] = {}
         self.llm_client = LLMClient()
+        self.game_master_data = self._load_game_master_data()
+    
+    def _load_game_master_data(self) -> List[Dict]:
+        """Load game master data from JSON file"""
+        try:
+            # Get the path to the backend directory more reliably
+            current_file = os.path.abspath(__file__)
+            # Go up from: backend/src/features/impostor_game/service.py to backend/
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file))))
+            game_master_path = os.path.join(backend_dir, "data", "game-master.json")
+            
+            print(f"Attempting to load game-master.json from: {game_master_path}")
+            print(f"File exists: {os.path.exists(game_master_path)}")
+            
+            with open(game_master_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading game-master.json: {e}")
+            print(f"Current file: {current_file}")
+            print(f"Backend dir: {backend_dir}")
+            print(f"Game master path: {game_master_path}")
+            return []
     
     def _create_agent(self, agent_data: Agent):
         """Create appropriate agent type based on role"""
@@ -24,32 +50,46 @@ class ImpostorGameService:
     def create_game(self, num_players: int = 4, max_steps: int = 30) -> InitGameResponse:
         game_id = str(uuid.uuid4())
         
-        # Among Us style names and colors
-        crewmates_data = [
-            ("Red", "red"), ("Blue", "blue"), ("Green", "green"), ("Pink", "pink"),
-            ("Orange", "orange"), ("Yellow", "yellow"), ("Black", "black"), ("White", "white")
-        ]
+        if not self.game_master_data:
+            raise FileNotFoundError("game-master.json is required but not available. Cannot create game without scenario data.")
         
-        # Limit to requested number of players
-        selected_data = crewmates_data[:num_players]
+        # Create agents based on game-master.json initial state
+        first_step = self.game_master_data[0]
         agents = []
+        impostor_id = None
         
-        for i, (name, color) in enumerate(selected_data):
-            agents.append(Agent(id=i, name=name, color=color, is_impostor=False))
+        color_to_id = {}
+        for i, (color, agent_data) in enumerate(first_step["agents"].items()):
+            # Check if this agent is the impostor based on actions containing "pretends" or "fake"
+            is_impostor = "pretend" in agent_data["action"].lower() or "fake" in agent_data["action"].lower()
+            if is_impostor:
+                impostor_id = i
+            
+            agent = Agent(
+                id=i,
+                name=color.capitalize(),
+                color=color,
+                is_impostor=is_impostor,
+                is_alive=True,
+                location=agent_data["location"],
+                action=agent_data["action"],
+                met=agent_data["met"]
+            )
+            agents.append(agent)
+            color_to_id[color] = i
         
-        impostor_id = random.randint(0, num_players - 1)
-        agents[impostor_id].is_impostor = True
+        # Determine meeting details from the last step
+        meeting_trigger = MeetingTrigger.DEAD_BODY  # Based on the game-master data ending
         
-        # Choose random meeting trigger and reporter
-        meeting_trigger = random.choice([MeetingTrigger.DEAD_BODY, MeetingTrigger.EMERGENCY_BUTTON])
-        reporter_id = random.randint(0, num_players - 1)
+        # Find who discovered the body (red in the last step)
+        reporter_id = color_to_id.get("red", 0)
+        meeting_reason = f"{agents[reporter_id].name} found Green's body in Electrical"
         
-        if meeting_trigger == MeetingTrigger.DEAD_BODY:
-            dead_colors = ["Purple", "Brown", "Cyan", "Lime"]  # Colors not in game
-            dead_color = random.choice(dead_colors)
-            meeting_reason = f"{agents[reporter_id].name} found {dead_color}'s body in {'Electrical' if random.random() > 0.5 else 'Medbay'}"
-        else:
-            meeting_reason = f"{agents[reporter_id].name} pressed the emergency button"
+        # Mark Green as dead based on game-master data
+        green_id = color_to_id.get("green")
+        if green_id is not None:
+            agents[green_id].is_alive = False
+            agents[green_id].action = "DEAD"
         
         game_state = GameState(
             game_id=game_id,
@@ -60,7 +100,7 @@ class ImpostorGameService:
             agents=agents,
             public_action_history=[],
             private_thoughts={},
-            impostor_id=impostor_id,
+            impostor_id=impostor_id if impostor_id is not None else 0,
             meeting_trigger=meeting_trigger,
             reporter_id=reporter_id,
             meeting_reason=meeting_reason
@@ -72,7 +112,7 @@ class ImpostorGameService:
             game_id=game_id,
             message=f"EMERGENCY MEETING! {meeting_reason}",
             agents=agents,
-            impostor_revealed=f"The impostor is: {agents[impostor_id].name} ({agents[impostor_id].color})",
+            impostor_revealed=f"The impostor is: {agents[impostor_id].name} ({agents[impostor_id].color})" if impostor_id is not None else "Unknown impostor",
             meeting_trigger=meeting_trigger,
             reporter_name=agents[reporter_id].name,
             meeting_reason=meeting_reason
@@ -274,6 +314,13 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
         agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
         if agents_who_want_to_speak:
             chosen_speaker = await self._select_next_speaker(agents_who_want_to_speak, game.public_action_history, alive_agents, game.step_number)
+            
+            # Generate TTS audio for the chosen speaker
+            speaker_agent = next((a for a in game.agents if a.id == chosen_speaker.agent_id), None)
+            if speaker_agent and chosen_speaker.speak:
+                audio_data = await tts_service.text_to_speech(chosen_speaker.speak, speaker_agent.color)
+                chosen_speaker.audio_base64 = audio_data
+            
             game.public_action_history.append(AgentAction(
                 agent_id=chosen_speaker.agent_id,
                 action_type=ActionType.SPEAK,

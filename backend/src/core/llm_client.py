@@ -46,3 +46,14 @@ class LLMClient:
             return response.content[0].text.strip()
         except Exception as e:
             return f"Erreur de génération: {str(e)}"
+        
+if __name__ == "__main__":
+    # Simple test for LLMClient
+    client = LLMClient()
+    test_messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is the capital of France?"},
+    ]
+    response = client.generate_response(test_messages)
+    print("LLM Response:", response)
+
