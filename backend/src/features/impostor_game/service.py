@@ -6,6 +6,7 @@ import asyncio
 
 from typing import List, Dict, Optional
 from src.core.llm_client import LLMClient
+from src.core.tts_service import tts_service
 from .schema import (
     Agent, GameState, GameStatus, GamePhase, ActionType, AgentAction, AgentTurn, MeetingTrigger,
     InitGameResponse, StepResponse, GameStateResponse, AgentMemory
@@ -313,6 +314,13 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
         agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
         if agents_who_want_to_speak:
             chosen_speaker = await self._select_next_speaker(agents_who_want_to_speak, game.public_action_history, alive_agents, game.step_number)
+            
+            # Generate TTS audio for the chosen speaker
+            speaker_agent = next((a for a in game.agents if a.id == chosen_speaker.agent_id), None)
+            if speaker_agent and chosen_speaker.speak:
+                audio_data = await tts_service.text_to_speech(chosen_speaker.speak, speaker_agent.color)
+                chosen_speaker.audio_base64 = audio_data
+            
             game.public_action_history.append(AgentAction(
                 agent_id=chosen_speaker.agent_id,
                 action_type=ActionType.SPEAK,

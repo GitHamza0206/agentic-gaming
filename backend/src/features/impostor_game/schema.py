@@ -53,6 +53,7 @@ class AgentTurn(BaseModel):
     speak: Optional[str] = None  # Optional - public statement
     vote: Optional[int] = None  # Optional - vote target agent_id
     memory_update: Optional['AgentMemory'] = None  # Memory from this step
+    audio_base64: Optional[str] = None  # Optional - TTS audio data as base64
 
 class GameState(BaseModel):
     game_id: str
