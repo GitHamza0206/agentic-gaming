@@ -1,5 +1,7 @@
 import random
 import uuid
+import json
+import os
 from typing import List, Dict, Optional
 from src.core.llm_client import LLMClient
 from .schema import (
@@ -12,6 +14,20 @@ class ImpostorGameService:
     def __init__(self):
         self.games: Dict[str, GameState] = {}
         self.llm_client = LLMClient()
+        self.game_master_data = self._load_game_master_data()
+    
+    def _load_game_master_data(self) -> List[Dict]:
+        """Load game master data from JSON file"""
+        try:
+            # Get the path relative to the backend directory
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            game_master_path = os.path.join(backend_dir, "data", "game-master.json")
+            
+            with open(game_master_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load game-master.json: {e}")
+            return []
     
     def _create_agent(self, agent_data: Agent):
         """Create appropriate agent type based on role"""
@@ -23,6 +39,77 @@ class ImpostorGameService:
     def create_game(self, num_players: int = 4) -> InitGameResponse:
         game_id = str(uuid.uuid4())
         
+        if not self.game_master_data:
+            # Fallback to original logic if game-master.json not available
+            return self._create_fallback_game(game_id, num_players)
+        
+        # Create agents based on game-master.json initial state
+        first_step = self.game_master_data[0]
+        agents = []
+        impostor_id = None
+        
+        color_to_id = {}
+        for i, (color, agent_data) in enumerate(first_step["agents"].items()):
+            # Check if this agent is the impostor based on actions containing "pretends" or "fake"
+            is_impostor = "pretend" in agent_data["action"].lower() or "fake" in agent_data["action"].lower()
+            if is_impostor:
+                impostor_id = i
+            
+            agent = Agent(
+                id=i,
+                name=color.capitalize(),
+                color=color,
+                is_impostor=is_impostor,
+                is_alive=True,
+                location=agent_data["location"],
+                action=agent_data["action"],
+                met=agent_data["met"]
+            )
+            agents.append(agent)
+            color_to_id[color] = i
+        
+        # Determine meeting details from the last step
+        meeting_trigger = MeetingTrigger.DEAD_BODY  # Based on the game-master data ending
+        
+        # Find who discovered the body (red in the last step)
+        reporter_id = color_to_id.get("red", 0)
+        meeting_reason = f"{agents[reporter_id].name} found Green's body in Electrical"
+        
+        # Mark Green as dead based on game-master data
+        green_id = color_to_id.get("green")
+        if green_id is not None:
+            agents[green_id].is_alive = False
+            agents[green_id].action = "DEAD"
+        
+        game_state = GameState(
+            game_id=game_id,
+            status=GameStatus.ACTIVE,
+            phase=GamePhase.ACTIVE,
+            step_number=1,
+            max_steps=30,
+            agents=agents,
+            public_action_history=[],
+            private_thoughts={},
+            impostor_id=impostor_id if impostor_id is not None else 0,
+            meeting_trigger=meeting_trigger,
+            reporter_id=reporter_id,
+            meeting_reason=meeting_reason
+        )
+        
+        self.games[game_id] = game_state
+        
+        return InitGameResponse(
+            game_id=game_id,
+            message=f"EMERGENCY MEETING! {meeting_reason}",
+            agents=agents,
+            impostor_revealed=f"The impostor is: {agents[impostor_id].name} ({agents[impostor_id].color})" if impostor_id is not None else "Unknown impostor",
+            meeting_trigger=meeting_trigger,
+            reporter_name=agents[reporter_id].name,
+            meeting_reason=meeting_reason
+        )
+    
+    def _create_fallback_game(self, game_id: str, num_players: int) -> InitGameResponse:
+        """Fallback game creation when game-master.json is not available"""
         # Among Us style names and colors
         crewmates_data = [
             ("Red", "red"), ("Blue", "blue"), ("Green", "green"), ("Pink", "pink"),
