@@ -196,6 +196,17 @@ class ImpostorGameService:
         context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
         if game.step_number == 1:
             context = f"{context_base} There is an impostor among you!"
+            
+            # Add initial discovery message from reporter
+            reporter_agent = next((a for a in alive_agents if a.id == game.reporter_id), None)
+            if reporter_agent:
+                discovery_message = f"I found Green's body in Electrical! Everyone come to the meeting table - we need to figure out who killed them!"
+                game.public_action_history.append(AgentAction(
+                    agent_id=game.reporter_id,
+                    action_type=ActionType.SPEAK,
+                    content=discovery_message,
+                    target_agent_id=None
+                ))
         else:
             context = f"{context_base} Find the impostor!"
         

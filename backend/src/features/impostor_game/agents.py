@@ -59,6 +59,7 @@ class Crewmate:
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
             {"role": "user", "content": f"""MURDER INVESTIGATION: A dead body has been found and you're investigating to identify the impostor. This is your detective analysis turn.
 
+YOU ARE: {self.data.color} ({self.data.name})
 YOUR ALIBI: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
 
 INVESTIGATION TASKS:
@@ -66,6 +67,8 @@ INVESTIGATION TASKS:
 2. Identify who had opportunity to commit the murder
 3. Form your current hypothesis about who the impostor is
 4. Gather evidence to support or challenge theories
+
+IMPORTANT: Remember you are {self.data.color} - don't question yourself or ask where you were!
 
 """ + """{
   "think": "your detective analysis - alibis, timelines, opportunity, evidence (always required)",
