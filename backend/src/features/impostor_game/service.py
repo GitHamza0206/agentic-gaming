@@ -4,7 +4,7 @@ from typing import List, Dict, Optional
 from src.core.llm_client import LLMClient
 from .schema import (
     Agent, GameState, GameStatus, GamePhase, ActionType, AgentAction, AgentTurn, MeetingTrigger,
-    InitGameResponse, StepResponse, GameStateResponse
+    InitGameResponse, StepResponse, GameStateResponse, AgentMemory
 )
 from .agents import Crewmate, Impostor
 
@@ -152,135 +152,67 @@ class ImpostorGameService:
         alive_agents = self._get_alive_agents(game)
         step_turns = []
         
-        # Special context for the first step where reporter speaks first
+        # Generate turns for all alive agents
+        context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
         if game.step_number == 1:
-            reporter = next(a for a in game.agents if a.id == game.reporter_id)
-            if reporter.is_alive:
-                # Reporter starts the conversation with a predefined turn
-                reporter_turn = AgentTurn(
-                    agent_id=reporter.id,
-                    think="I need to start this emergency meeting and share what I found.",
-                    speak=f"EMERGENCY MEETING! {game.meeting_reason}. We need to discuss this situation!",
-                    vote=None
-                )
-                step_turns.append(reporter_turn)
-                
-                # Add reporter's private thought
-                if reporter.id not in game.private_thoughts:
-                    game.private_thoughts[reporter.id] = []
-                game.private_thoughts[reporter.id].append(AgentAction(
-                    agent_id=reporter.id,
-                    action_type=ActionType.THINK,
-                    content=reporter_turn.think,
-                    target_agent_id=None
-                ))
-                
-                # Add reporter's public speech
-                if reporter_turn.speak:
-                    game.public_action_history.append(AgentAction(
-                        agent_id=reporter.id,
-                        action_type=ActionType.SPEAK,
-                        content=reporter_turn.speak,
-                        target_agent_id=None
-                    ))
-                
-                # Other agents act - generate all turns first
-                for agent_data in alive_agents:
-                    if agent_data.id != reporter.id:  # Skip reporter as they already acted
-                        agent = self._create_agent(agent_data)
-                        context = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}. There is an impostor among you!"
-                        
-                        # Get agent's private thoughts
-                        private_thoughts = game.private_thoughts.get(agent_data.id, [])
-                        
-                        turn = agent.choose_action(context, game.public_action_history, private_thoughts, game.step_number)
-                        step_turns.append(turn)
-                        
-                        # Process the turn - store think privately
-                        if agent_data.id not in game.private_thoughts:
-                            game.private_thoughts[agent_data.id] = []
-                        game.private_thoughts[agent_data.id].append(AgentAction(
-                            agent_id=agent_data.id,
-                            action_type=ActionType.THINK,
-                            content=turn.think,
-                            target_agent_id=None
-                        ))
-                
-                # After all agents have generated their turns, randomly select one speaker (excluding reporter)
-                other_agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None and turn.agent_id != reporter.id]
-                if other_agents_who_want_to_speak:
-                    chosen_speaker = random.choice(other_agents_who_want_to_speak)
-                    game.public_action_history.append(AgentAction(
-                        agent_id=chosen_speaker.agent_id,
-                        action_type=ActionType.SPEAK,
-                        content=chosen_speaker.speak,
-                        target_agent_id=None
-                    ))
-                
-                # Now process votes from all agents (including reporter if they voted)
-                for turn in step_turns:
-                    if turn.vote is not None:
-                        game.public_action_history.append(AgentAction(
-                            agent_id=turn.agent_id,
-                            action_type=ActionType.VOTE,
-                            content=f"I vote to eliminate Agent{turn.vote}",
-                            target_agent_id=turn.vote
-                        ))
-                        
-                        # Count the vote
-                        if turn.vote in game.current_votes:
-                            game.current_votes[turn.vote] += 1
-                        else:
-                            game.current_votes[turn.vote] = 1
+            context = f"{context_base} There is an impostor among you!"
         else:
-            # Normal step - generate all agent turns first
-            context = f"EMERGENCY MEETING in progress. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}. Find the impostor!"
+            context = f"{context_base} Find the impostor!"
+        
+        for agent_data in alive_agents:
+            agent = self._create_agent(agent_data)
             
-            for agent_data in alive_agents:
-                agent = self._create_agent(agent_data)
-                
-                # Get agent's private thoughts
-                private_thoughts = game.private_thoughts.get(agent_data.id, [])
-                
-                turn = agent.choose_action(context, game.public_action_history, private_thoughts, game.step_number)
-                step_turns.append(turn)
-                
-                # Process the turn - store think privately
-                if agent_data.id not in game.private_thoughts:
-                    game.private_thoughts[agent_data.id] = []
-                game.private_thoughts[agent_data.id].append(AgentAction(
-                    agent_id=agent_data.id,
-                    action_type=ActionType.THINK,
-                    content=turn.think,
-                    target_agent_id=None
-                ))
+            # Get agent's private thoughts
+            private_thoughts = game.private_thoughts.get(agent_data.id, [])
             
-            # After all agents have generated their turns, randomly select one speaker
-            agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
-            if agents_who_want_to_speak:
-                chosen_speaker = random.choice(agents_who_want_to_speak)
+            # Add special context for reporter in first step
+            agent_context = context
+            if game.step_number == 1 and agent_data.id == game.reporter_id:
+                agent_context = f"{context} You are the one who called this meeting because: {game.meeting_reason}"
+            
+            turn = agent.choose_action(agent_context, game.public_action_history, private_thoughts, game.step_number)
+            step_turns.append(turn)
+            
+            # Save memory update to persistent agent data (if not already added by agent)
+            if turn.memory_update and (not agent_data.memory_history or agent_data.memory_history[-1] != turn.memory_update):
+                agent_data.memory_history.append(turn.memory_update)
+            
+            # Process the turn - store think privately
+            if agent_data.id not in game.private_thoughts:
+                game.private_thoughts[agent_data.id] = []
+            game.private_thoughts[agent_data.id].append(AgentAction(
+                agent_id=agent_data.id,
+                action_type=ActionType.THINK,
+                content=turn.think,
+                target_agent_id=None
+            ))
+        
+        # After all agents have generated their turns, randomly select one speaker
+        agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
+        if agents_who_want_to_speak:
+            chosen_speaker = random.choice(agents_who_want_to_speak)
+            game.public_action_history.append(AgentAction(
+                agent_id=chosen_speaker.agent_id,
+                action_type=ActionType.SPEAK,
+                content=chosen_speaker.speak,
+                target_agent_id=None
+            ))
+        
+        # Now process all votes
+        for turn in step_turns:
+            if turn.vote is not None:
                 game.public_action_history.append(AgentAction(
-                    agent_id=chosen_speaker.agent_id,
-                    action_type=ActionType.SPEAK,
-                    content=chosen_speaker.speak,
-                    target_agent_id=None
+                    agent_id=turn.agent_id,
+                    action_type=ActionType.VOTE,
+                    content=f"I vote to eliminate Agent{turn.vote}",
+                    target_agent_id=turn.vote
                 ))
-            
-            # Now process all votes
-            for turn in step_turns:
-                if turn.vote is not None:
-                    game.public_action_history.append(AgentAction(
-                        agent_id=turn.agent_id,
-                        action_type=ActionType.VOTE,
-                        content=f"I vote to eliminate Agent{turn.vote}",
-                        target_agent_id=turn.vote
-                    ))
-                    
-                    # Count the vote
-                    if turn.vote in game.current_votes:
-                        game.current_votes[turn.vote] += 1
-                    else:
-                        game.current_votes[turn.vote] = 1
+                
+                # Count the vote
+                if turn.vote in game.current_votes:
+                    game.current_votes[turn.vote] += 1
+                else:
+                    game.current_votes[turn.vote] = 1
         
         # Check for elimination (if someone has majority votes)
         total_alive = len(alive_agents)
@@ -338,3 +270,7 @@ class ImpostorGameService:
             game_over=game_over,
             message=message
         )
+    
+    def process_step(self, game_id: str) -> Optional[StepResponse]:
+        """Alias for step_game to maintain compatibility with tests"""
+        return self.step_game(game_id)
