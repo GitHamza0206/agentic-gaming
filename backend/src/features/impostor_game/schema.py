@@ -54,6 +54,7 @@ class AgentTurn(BaseModel):
     vote: Optional[str] = None  # Optional - vote target agent color
     impostor_hypothesis: Optional[str] = None  # Agent's current suspicion (agent color)
     memory_update: Optional['AgentMemory'] = None  # Memory from this step
+    audio_base64: Optional[str] = None  # Optional - TTS audio data as base64
 
 class GameState(BaseModel):
     game_id: str

@@ -11,9 +11,9 @@ class LLMClient:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=api_key)
     
-    def generate_response(
+    async def generate_response(
         self, 
         messages: List[Dict[str, str]], 
         max_tokens: int = 200,
@@ -35,7 +35,7 @@ class LLMClient:
             if not conversation_messages:
                 conversation_messages = [{"role": "user", "content": "Continue the conversation."}]
             
-            response = self.client.messages.create(
+            response = await self.client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=max_tokens,
                 temperature=temperature,

@@ -2,8 +2,11 @@ import random
 import uuid
 import json
 import os
+import asyncio
+
 from typing import List, Dict, Optional
 from src.core.llm_client import LLMClient
+from src.core.tts_service import tts_service
 from .schema import (
     Agent, GameState, GameStatus, GamePhase, ActionType, AgentAction, AgentTurn, MeetingTrigger,
     InitGameResponse, StepResponse, GameStateResponse, AgentMemory
@@ -44,7 +47,7 @@ class ImpostorGameService:
         else:
             return Crewmate(agent_data, self.llm_client)
     
-    def create_game(self, num_players: int = 4) -> InitGameResponse:
+    def create_game(self, num_players: int = 4, max_steps: int = 30) -> InitGameResponse:
         game_id = str(uuid.uuid4())
         
         if not self.game_master_data:
@@ -92,7 +95,7 @@ class ImpostorGameService:
             status=GameStatus.ACTIVE,
             phase=GamePhase.ACTIVE,
             step_number=1,
-            max_steps=30,
+            max_steps=max_steps,
             agents=agents,
             public_action_history=[],
             private_thoughts={},
@@ -143,7 +146,68 @@ class ImpostorGameService:
     def _get_alive_agents(self, game: GameState) -> List[Agent]:
         return [agent for agent in game.agents if agent.is_alive]
     
-    def step_game(self, game_id: str) -> Optional[StepResponse]:
+    async def _select_next_speaker(self, candidate_turns: List[AgentTurn], conversation_history: List[AgentAction], alive_agents: List[Agent], step_number: int) -> AgentTurn:
+        """Use LLM to intelligently select who should speak next based on conversation flow"""
+        if len(candidate_turns) == 1:
+            return candidate_turns[0]
+        
+        # Build context for LLM decision
+        recent_speakers = []
+        for action in conversation_history[-5:]:  # Last 5 speaking actions
+            if action.action_type == ActionType.SPEAK:
+                speaker_name = next((agent.name for agent in alive_agents if agent.id == action.agent_id), f"Agent{action.agent_id}")
+                recent_speakers.append(f"{speaker_name}: {action.content}")
+        
+        conversation_context = "\n".join(recent_speakers) if recent_speakers else "No previous conversation."
+        
+        # Prepare candidate information
+        candidates_info = []
+        for turn in candidate_turns:
+            agent_name = next((agent.name for agent in alive_agents if agent.id == turn.agent_id), f"Agent{turn.agent_id}")
+            candidates_info.append(f"- {agent_name} wants to say: \"{turn.speak}\"")
+        
+        candidates_text = "\n".join(candidates_info)
+        
+        prompt = f"""You are moderating an emergency meeting in a social deduction game similar to Among Us. Based on the conversation flow, decide who should speak next.
+
+Current step: {step_number}
+
+Recent conversation:
+{conversation_context}
+
+Candidates who want to speak:
+{candidates_text}
+
+Choose the most logical speaker based on:
+1. Natural conversation flow and responses
+2. Who hasn't spoken recently
+3. Relevance of their message to current discussion
+4. Creating engaging dialogue dynamics
+
+Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation needed."""
+
+        try:
+            response = await self.llm_client.generate_response(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=50,
+                temperature=0.3
+            )
+            
+            # Find matching agent by name
+            chosen_name = response.strip().strip('"')
+            for turn in candidate_turns:
+                agent_name = next((agent.name for agent in alive_agents if agent.id == turn.agent_id), f"Agent{turn.agent_id}")
+                if agent_name.lower() == chosen_name.lower():
+                    return turn
+            
+            # Fallback to first candidate if name not found
+            return candidate_turns[0]
+            
+        except Exception:
+            # Fallback to random selection if LLM fails
+            return random.choice(candidate_turns)
+    
+    async def step_game(self, game_id: str) -> Optional[StepResponse]:
         game = self.get_game(game_id)
         if not game:
             return None
@@ -193,68 +257,75 @@ class ImpostorGameService:
         step_turns = []
         
         # Generate turns for all alive agents
-        context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
-        if game.step_number == 1:
-            context = f"{context_base} There is an impostor among you!"
-            
-            # Add initial discovery message from reporter
-            reporter_agent = next((a for a in alive_agents if a.id == game.reporter_id), None)
-            if reporter_agent:
-                discovery_message = f"I found Green's body in Electrical! Everyone come to the meeting table - we need to figure out who killed them!"
-                game.public_action_history.append(AgentAction(
-                    agent_id=game.reporter_id,
-                    action_type=ActionType.SPEAK,
-                    content=discovery_message,
-                    target_agent_id=None
-                ))
-        else:
-            context = f"{context_base} Find the impostor!"
+        if game.step_number < 25:  # Normal conversation phase
+            context_base = f"Step {game.step_number}/{game.max_steps}. You are doing tasks around the ship with {len(alive_agents)} crewmates."
+            if game.step_number == 1:
+                context = f"{context_base} You just started your shift. Share your thoughts about the tasks or your fellow crewmates."
+            elif game.step_number < 10:
+                context = f"{context_base} Continue doing your tasks. You can chat casually with others or share observations."
+            elif game.step_number < 20:
+                context = f"{context_base} You've been working for a while. Share any suspicions or observations about other crewmates."
+            else:
+                context = f"{context_base} Something feels off. Be more alert and share any concerns you might have."
+        else:  # Emergency meeting phase
+            context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
+            if game.step_number == 25:
+                context = f"{context_base} There is an impostor among you! Share what you know and discuss who seems suspicious."
+            else:
+                context = f"{context_base} Continue the discussion. Find the impostor before it's too late!"
         
-        for agent_data in alive_agents:
+        # Create async tasks for all agents to process in parallel
+        async def process_agent(agent_data: Agent) -> AgentTurn:
             agent = self._create_agent(agent_data)
             
             # Get agent's private thoughts
             private_thoughts = game.private_thoughts.get(agent_data.id, [])
             
-            # Add special context for reporter in first step
+            # Add special context for reporter when emergency meeting starts
             agent_context = context
-            if game.step_number == 1 and agent_data.id == game.reporter_id:
+            if game.step_number == 25 and agent_data.id == game.reporter_id:
                 agent_context = f"{context} You are the one who called this meeting because: {game.meeting_reason}"
             
-            turn = agent.choose_action(agent_context, game.public_action_history, private_thoughts, game.step_number, game.agents)
-            step_turns.append(turn)
+            turn = await agent.choose_action(agent_context, game.public_action_history, private_thoughts, game.step_number, game.agents)
             
             # Save memory update to persistent agent data (if not already added by agent)
             if turn.memory_update and (not agent_data.memory_history or agent_data.memory_history[-1] != turn.memory_update):
                 agent_data.memory_history.append(turn.memory_update)
             
-            # Process the turn - store think privately
-            if agent_data.id not in game.private_thoughts:
-                game.private_thoughts[agent_data.id] = []
-            game.private_thoughts[agent_data.id].append(AgentAction(
-                agent_id=agent_data.id,
+            return turn
+        
+        # Execute all agent turns in parallel
+        tasks = [process_agent(agent_data) for agent_data in alive_agents]
+        step_turns = await asyncio.gather(*tasks)
+        
+        # Process all turns - store thinks privately
+        for turn in step_turns:
+            if turn.agent_id not in game.private_thoughts:
+                game.private_thoughts[turn.agent_id] = []
+            game.private_thoughts[turn.agent_id].append(AgentAction(
+                agent_id=turn.agent_id,
                 action_type=ActionType.THINK,
                 content=turn.think,
                 target_agent_id=None
             ))
         
-        # Allow multiple agents to speak per step for more realistic group discussion
+        # After all agents have generated their turns, use LLM to intelligently select speaker
         agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
         if agents_who_want_to_speak:
-            # Randomly shuffle the order of speakers to vary who goes first
-            random.shuffle(agents_who_want_to_speak)
+            chosen_speaker = await self._select_next_speaker(agents_who_want_to_speak, game.public_action_history, alive_agents, game.step_number)
             
-            # Let 1-3 agents speak per step (randomly chosen number)
-            num_speakers = min(random.randint(1, 3), len(agents_who_want_to_speak))
-            speakers_this_step = agents_who_want_to_speak[:num_speakers]
+            # Generate TTS audio for the chosen speaker
+            speaker_agent = next((a for a in game.agents if a.id == chosen_speaker.agent_id), None)
+            if speaker_agent and chosen_speaker.speak:
+                audio_data = await tts_service.text_to_speech(chosen_speaker.speak, speaker_agent.color)
+                chosen_speaker.audio_base64 = audio_data
             
-            for speaker in speakers_this_step:
-                game.public_action_history.append(AgentAction(
-                    agent_id=speaker.agent_id,
-                    action_type=ActionType.SPEAK,
-                    content=speaker.speak,
-                    target_agent_id=None
-                ))
+            game.public_action_history.append(AgentAction(
+                agent_id=chosen_speaker.agent_id,
+                action_type=ActionType.SPEAK,
+                content=chosen_speaker.speak,
+                target_agent_id=None
+            ))
         
         # Now process all votes
         for turn in step_turns:
@@ -330,6 +401,6 @@ class ImpostorGameService:
             message=message
         )
     
-    def process_step(self, game_id: str) -> Optional[StepResponse]:
+    async def process_step(self, game_id: str) -> Optional[StepResponse]:
         """Alias for step_game to maintain compatibility with tests"""
-        return self.step_game(game_id)
+        return await self.step_game(game_id)

@@ -1,18 +1,140 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
+
+interface Agent {
+  id: number;
+  name: string;
+  color: string;
+  is_impostor: boolean;
+  is_alive: boolean;
+}
+
+interface AgentAction {
+  agent_id: number;
+  action_type: string;
+  content: string;
+  target_agent_id?: number;
+}
+
+interface AgentTurn {
+  agent_id: number;
+  think: string;
+  speak?: string;
+  vote?: number;
+}
+
+interface GameData {
+  game_id: string;
+  agents: Agent[];
+  conversation_history: AgentAction[];
+  step_number: number;
+  max_steps: number;
+  game_over: boolean;
+  winner?: string;
+  message: string;
+}
 
 const AmongUsSimulation = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [phase, setPhase] = useState('simulation');
-  const [memoryAccess, setMemoryAccess] = useState({
-    red: false,
-    blue: false,
-    green: false,
-    yellow: false
-  });
+  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Game Master Scenario Data
+  // API Configuration
+  const API_BASE = 'http://localhost:8000';
+
+  // Initialize game
+  const initializeGame = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`${API_BASE}/impostor-game/init?num_players=4`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const initialGameData = {
+        game_id: data.game_id,
+        agents: data.agents,
+        conversation_history: [],
+        step_number: 1, // Start at step 1
+        max_steps: 30,
+        game_over: false,
+        message: data.message
+      };
+      
+      console.log('Setting initial game data:', initialGameData);
+      setGameData(initialGameData);
+      setPhase('emergency_meeting');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to initialize game');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step game forward
+  const stepGame = async () => {
+    if (!gameData) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/impostor-game/step/${gameData.game_id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('stepGame response:', data);
+      
+      // Update game data with new information - accumulate conversation history
+      setGameData(prevGameData => ({
+        ...prevGameData!,
+        conversation_history: data.conversation_history || prevGameData!.conversation_history,
+        step_number: data.step_number,
+        game_over: data.game_over || false,
+        winner: data.winner,
+        message: data.message || 'Step completed'
+      }));
+      
+      // Check if game should end
+      if (data.game_over) {
+        console.log('Game ended:', { game_over: data.game_over, winner: data.winner });
+        setIsPlaying(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to step game');
+      setIsPlaying(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize game when reaching step 30
+  useEffect(() => {
+    if (currentStep === 30 && !gameData && phase === 'emergency_meeting') {
+      console.log('Initializing game at step 30...');
+      initializeGame();
+    }
+  }, [currentStep, gameData, phase]);
+
+  // Game Master Scenario Data (keeping for visual simulation)
   const gameScenario = [
     {step: 0, agents: {red: {location: 'Cafeteria', action: 'starts doing wiring task', met: ['blue', 'green', 'yellow']}, blue: {location: 'Cafeteria', action: 'starts doing fuel task', met: ['red', 'green', 'yellow']}, green: {location: 'Cafeteria', action: 'starts doing garbage disposal task', met: ['red', 'blue', 'yellow']}, yellow: {location: 'Cafeteria', action: 'pretends to do card swipe task', met: ['red', 'blue', 'green']}}},
     {step: 1, agents: {red: {location: 'Cafeteria', action: 'continues wiring task', met: ['blue', 'green', 'yellow']}, blue: {location: 'Cafeteria', action: 'continues fuel task', met: ['red', 'green', 'yellow']}, green: {location: 'Cafeteria', action: 'continues garbage disposal task', met: ['red', 'blue', 'yellow']}, yellow: {location: 'Cafeteria', action: 'fake struggling with card swipe', met: ['red', 'blue', 'green']}}},
@@ -47,12 +169,12 @@ const AmongUsSimulation = () => {
     {step: 30, agents: {red: {location: 'Electrical', action: 'enters Electrical, discovers green\'s dead body, calls emergency meeting', met: []}, blue: {location: 'Cafeteria', action: 'hears emergency meeting call, walks to meeting table', met: []}, green: {location: 'Electrical', action: 'DEAD', met: [], status: 'dead'}, yellow: {location: 'Cafeteria', action: 'hears emergency meeting call, walks to meeting table', met: []}}}
   ];
 
-  // Room positions for visual layout
+  // Room positions for visual layout (adjusted for better fit)
   const roomPositions = {
-    'Cafeteria': { x: 200, y: 150, width: 120, height: 80, color: '#ffeb3b' },
-    'Electrical': { x: 450, y: 150, width: 100, height: 80, color: '#f44336' },
-    'Navigation': { x: 200, y: 300, width: 100, height: 80, color: '#2196f3' },
-    'Hallway': { x: 350, y: 225, width: 80, height: 50, color: '#9e9e9e' }
+    'Cafeteria': { x: 100, y: 100, width: 140, height: 90, color: '#ffeb3b' },
+    'Electrical': { x: 380, y: 100, width: 120, height: 90, color: '#f44336' },
+    'Navigation': { x: 100, y: 280, width: 120, height: 90, color: '#2196f3' },
+    'Hallway': { x: 280, y: 190, width: 100, height: 60, color: '#9e9e9e' }
   };
 
   // Agent colors
@@ -63,355 +185,617 @@ const AmongUsSimulation = () => {
     yellow: '#ffeb3b'
   };
 
-  // Generate memories based on encounters
-  const generateMemories = (agentId) => {
-    const memories = [];
-    for (let i = 0; i <= currentStep; i++) {
-      const stepData = gameScenario[i];
-      if (stepData && stepData.agents[agentId]) {
-        const agent = stepData.agents[agentId];
-        if (agent.met && agent.met.length > 0) {
-          memories.push({
-            step: i,
-            content: `Step ${i}: Saw ${agent.met.join(', ')} in ${agent.location}`,
-            location: agent.location,
-            met: agent.met
-          });
-        }
-      }
-    }
-    return memories;
-  };
 
-  // Generate reasoning for emergency meeting
-  const generateReasoning = (agentId) => {
-    const personalMemories = generateMemories(agentId);
-    let availableMemories = personalMemories;
-
-    if (memoryAccess[agentId]) {
-      // Add shared memories from other agents
-      const allAgents = ['red', 'blue', 'green', 'yellow'];
-      allAgents.forEach(otherId => {
-        if (otherId !== agentId && memoryAccess[otherId]) {
-          availableMemories = [...availableMemories, ...generateMemories(otherId)];
-        }
-      });
-    }
-
-    if (agentId === 'yellow') {
-      // Impostor reasoning
-      if (memoryAccess[agentId]) {
-        return "I was doing tasks in Navigation and Cafeteria. Based on the shared memories, I can see that everyone was scattered around doing tasks. This is very suspicious timing.";
-      } else {
-        return "I was doing tasks in Navigation and Cafeteria the whole time. I never went to Electrical.";
-      }
-    } else {
-      // Crew reasoning
-      if (memoryAccess[agentId] && availableMemories.length > personalMemories.length) {
-        const criticalEvidence = availableMemories.find(m => 
-          m.content.includes('yellow') && m.location === 'Electrical'
-        );
-        if (criticalEvidence) {
-          return `Based on shared memories, I can see that yellow was spotted near Electrical around the time of the murder. Cross-referencing the timelines, yellow's alibi doesn't match the witness accounts.`;
-        }
-        return "Based on shared memories, I can piece together everyone's movements. The timeline shows suspicious gaps in yellow's story.";
-      } else {
-        return `I remember seeing some people during my tasks, but I can't make a clear connection to who might be the impostor based on my limited observations.`;
-      }
-    }
-  };
-
-  // Auto-advance simulation
+  // Auto-advance simulation 
   useEffect(() => {
     let interval;
     if (isPlaying && currentStep < 30 && phase === 'simulation') {
       interval = setInterval(() => {
         setCurrentStep(prev => {
-          if (prev === 29) {
-            setPhase('emergency_meeting');
-            setIsPlaying(false);
-            return prev + 1;
+          const nextStep = prev + 1;
+          
+          // At step 30, pause for 2 seconds then switch to emergency meeting
+          if (nextStep === 30) {
+            setTimeout(() => {
+              setPhase('emergency_meeting');
+              // API will be initialized by the other useEffect
+            }, 2000); // 2 second pause
           }
-          return prev + 1;
+          
+          return nextStep;
         });
-      }, 2000);
+      }, 500); // 0.5 seconds for visual simulation
     }
+    
     return () => clearInterval(interval);
   }, [isPlaying, currentStep, phase]);
+
+  // Auto-step through API calls during emergency meeting
+  useEffect(() => {
+    console.log('Auto-step useEffect triggered:', {
+      isPlaying,
+      gameData: gameData ? {
+        step_number: gameData.step_number,
+        max_steps: gameData.max_steps,
+        game_over: gameData.game_over
+      } : null,
+      currentStep,
+      phase,
+      loading
+    });
+    
+    let timeout: NodeJS.Timeout;
+    
+    // Only auto-step if we're in emergency meeting, playing, have game data, not loading, and game isn't over
+    if (isPlaying && 
+        gameData && 
+        phase === 'emergency_meeting' && 
+        !loading && 
+        !gameData.game_over && 
+        gameData.step_number < gameData.max_steps) {
+      
+      console.log('Scheduling next API call in 3 seconds...');
+      timeout = setTimeout(() => {
+        console.log('Calling stepGame()...');
+        stepGame();
+      }, 3000); // 3 seconds delay for reading messages
+    } else {
+      console.log('Auto-step conditions not met:', {
+        isPlaying,
+        hasGameData: !!gameData,
+        isEmergencyMeeting: phase === 'emergency_meeting',
+        notLoading: !loading,
+        notGameOver: gameData ? !gameData.game_over : 'no gameData',
+        stepLessThanMax: gameData ? gameData.step_number < gameData.max_steps : 'no gameData'
+      });
+    }
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [isPlaying, gameData?.step_number, gameData?.game_over, phase, loading]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatContainerRef.current && gameData?.conversation_history) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [gameData?.conversation_history?.length]);
 
   const resetSimulation = () => {
     setCurrentStep(0);
     setIsPlaying(false);
     setPhase('simulation');
+    setGameData(null); // Clear API data
+    setError(null);
   };
 
-  const toggleMemoryAccess = (agentId) => {
-    setMemoryAccess(prev => ({
-      ...prev,
-      [agentId]: !prev[agentId]
-    }));
+  // Map agent colors to hex values
+  const getAgentColor = (color: string) => {
+    const colorMap: { [key: string]: string } = {
+      'red': '#f44336',
+      'blue': '#2196f3', 
+      'green': '#4caf50',
+      'yellow': '#ffeb3b',
+      'pink': '#e91e63',
+      'orange': '#ff9800',
+      'black': '#424242',
+      'white': '#fafafa'
+    };
+    return colorMap[color.toLowerCase()] || '#9e9e9e';
+  };
+
+  // Get agent by ID
+  const getAgentById = (id: number) => {
+    return gameData?.agents.find(agent => agent.id === id);
   };
 
   const currentStepData = gameScenario[currentStep] || gameScenario[0];
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-4 bg-gray-100 min-h-screen">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-3xl font-bold text-center mb-6">Among Us Multi-Agent AI Simulation</h1>
-        
-        {/* Controls */}
-        <div className="flex justify-center items-center gap-4 mb-6">
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className={`flex items-center gap-2 px-4 py-2 rounded ${
-              isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-            } text-white`}
-            disabled={phase === 'emergency_meeting'}
-          >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-          
-          <button
-            onClick={resetSimulation}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
-          >
-            <RotateCcw size={16} />
-            Reset
-          </button>
-          
-          <div className="text-lg font-semibold">
-            Step: {currentStep}/30 | Phase: {phase === 'simulation' ? 'Simulation' : 'Emergency Meeting'}
+    <div className="w-full h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden flex flex-col">
+      {/* Space background elements */}
+      <div className="absolute inset-0 opacity-20">
+        <div className="absolute top-10 left-10 w-2 h-2 bg-white rounded-full animate-pulse"></div>
+        <div className="absolute top-20 right-20 w-1 h-1 bg-yellow-300 rounded-full animate-ping"></div>
+        <div className="absolute bottom-20 left-1/4 w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+        <div className="absolute top-1/3 right-1/3 w-1 h-1 bg-blue-300 rounded-full animate-ping"></div>
+        <div className="absolute bottom-1/3 right-10 w-2 h-2 bg-purple-300 rounded-full animate-pulse"></div>
+      </div>
+      
+      <div className="relative z-10 w-full max-w-[95vw] mx-auto p-2 h-full flex flex-col">
+        <div className="bg-gray-900 rounded-xl shadow-2xl border-2 border-cyan-400 p-4 flex-1 flex flex-col overflow-hidden"
+             style={{background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'}}>
+        {/* Loading State */}
+        {loading && phase === 'simulation' && (
+          <div className="text-center py-6">
+            <div className="inline-block w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-lg text-cyan-300 mt-2 font-bold">Loading Crewmates...</div>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Game Map */}
-            <div className="lg:col-span-2">
-              <div className="bg-gray-800 rounded-lg p-4 relative" style={{height: '500px'}}>
-                <h3 className="text-white text-xl mb-4">Game Map</h3>
+        )}
+        
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-900 border border-red-400 text-red-200 px-4 py-2 rounded-lg mb-3 border-dashed">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⚠️</span>
+              <div>
+                <strong className="font-bold text-red-300">Emergency Alert:</strong> {error}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Header and Controls - Hidden during emergency meeting */}
+        {phase === 'simulation' && (
+          <>
+            <div className="text-center mb-4">
+              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 mb-2 tracking-wide">
+                🚀 AMONG US 🛸
+              </h1>
+              <p className="text-lg text-cyan-300 font-bold">Multi-Agent AI Space Mission</p>
+            </div>
+            
+            {/* Controls */}
+            <div className="flex justify-center items-center gap-4 mb-4">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`group relative overflow-hidden px-6 py-3 rounded-lg font-bold text-sm transition-all transform hover:scale-105 shadow-lg ${
+                  isPlaying 
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border border-red-400' 
+                    : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border border-green-400'
+                }`}
+                disabled={loading || (gameData && gameData.game_over)}
+              >
+                <div className="flex items-center gap-2">
+                  {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                  {isPlaying ? '⏸️ PAUSE MISSION' : '▶️ START MISSION'}
+                </div>
+                <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
+              </button>
               
-              {/* Roads/Paths between rooms */}
+              <button
+                onClick={resetSimulation}
+                className="group relative overflow-hidden px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold text-sm rounded-lg transition-all transform hover:scale-105 shadow-lg border border-blue-400"
+                disabled={loading}
+              >
+                <div className="flex items-center gap-2">
+                  <RotateCcw size={16} />
+                  🔄 RESET SHIP
+                </div>
+                <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
+              </button>
+            </div>
+            
+            {/* Mission Status */}
+            <div className="text-center mb-3">
+              <div className="inline-block bg-gray-800 border border-cyan-400 rounded-lg px-4 py-2">
+                <div className="text-lg font-bold text-cyan-300 mb-1">
+                  🌌 MISSION STATUS 🌌
+                </div>
+                <div className="text-sm text-white">
+                  <span className="text-cyan-400 font-bold">Step:</span> {currentStep}/30 | 
+                  <span className="text-purple-400 font-bold ml-2">Phase:</span> {phase === 'simulation' ? '🚀 Simulation' : '🚨 Emergency Meeting'}
+                </div>
+                {gameData && (
+                  <div className="mt-2 p-2 bg-blue-900 rounded-lg border border-blue-500">
+                    <p className="text-xs text-cyan-200 font-medium">{gameData.message}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-3 gap-4 flex-1 min-h-0">
+            {/* Space Ship Map - Hidden during emergency meeting */}
+            {phase === 'simulation' && (
+            <div className="xl:col-span-3 lg:col-span-2 min-h-0">
+              <div className="bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl p-3 relative border-2 border-cyan-500 shadow-2xl overflow-hidden h-full">
+                <div className="flex items-center justify-center mb-2">
+                  <h3 className="text-lg font-bold text-cyan-300 tracking-wide">🛸 THE SKELD 🛸</h3>
+                </div>
+              
+              {/* Space corridors between rooms */}
               <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{zIndex: 1}}>
                 {/* Cafeteria to Hallway */}
-                <line x1="320" y1="190" x2="350" y2="225" stroke="#666" strokeWidth="8" opacity="0.7" />
+                <line x1="240" y1="145" x2="280" y2="220" stroke="url(#corridor-gradient)" strokeWidth="10" opacity="0.8" />
                 {/* Hallway to Electrical */}
-                <line x1="430" y1="240" x2="450" y2="190" stroke="#666" strokeWidth="8" opacity="0.7" />
+                <line x1="380" y1="220" x2="380" y2="145" stroke="url(#corridor-gradient)" strokeWidth="10" opacity="0.8" />
                 {/* Hallway to Navigation */}
-                <line x1="380" y1="275" x2="250" y2="300" stroke="#666" strokeWidth="8" opacity="0.7" />
+                <line x1="280" y1="250" x2="220" y2="280" stroke="url(#corridor-gradient)" strokeWidth="10" opacity="0.8" />
                 
-                {/* Path indicators (small circles at intersections) */}
-                <circle cx="350" cy="225" r="4" fill="#444" />
-                <circle cx="430" cy="240" r="4" fill="#444" />
-                <circle cx="380" cy="275" r="4" fill="#444" />
+                {/* Gradient definition for corridors */}
+                <defs>
+                  <linearGradient id="corridor-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style={{stopColor: '#06b6d4', stopOpacity: 0.6}} />
+                    <stop offset="50%" style={{stopColor: '#8b5cf6', stopOpacity: 0.8}} />
+                    <stop offset="100%" style={{stopColor: '#06b6d4', stopOpacity: 0.6}} />
+                  </linearGradient>
+                </defs>
+                
+                {/* Junction points with glow effect */}
+                <circle cx="280" cy="220" r="6" fill="#06b6d4" opacity="0.8">
+                  <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="380" cy="190" r="6" fill="#8b5cf6" opacity="0.8">
+                  <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="250" cy="260" r="6" fill="#06b6d4" opacity="0.8">
+                  <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite"/>
+                </circle>
               </svg>
 
-              {/* Rooms */}
-              {Object.entries(roomPositions).map(([roomName, pos]) => (
-                <div
-                  key={roomName}
-                  className="absolute border-2 border-gray-600 rounded flex items-center justify-center text-black font-bold"
-                  style={{
-                    left: pos.x,
-                    top: pos.y,
-                    width: pos.width,
-                    height: pos.height,
-                    backgroundColor: pos.color,
-                    zIndex: 2
-                  }}
-                >
-                  {roomName}
-                </div>
-              ))}
+              {/* Space Ship Rooms */}
+              {Object.entries(roomPositions).map(([roomName, pos]) => {
+                const roomEmojis = {
+                  'Cafeteria': '🍽️',
+                  'Electrical': '⚡',
+                  'Navigation': '🧭',
+                  'Hallway': '🚪'
+                };
+                
+                return (
+                  <div
+                    key={roomName}
+                    className="absolute rounded-3xl flex flex-col items-center justify-center text-white font-black text-lg border-4 shadow-2xl transition-all hover:scale-105"
+                    style={{
+                      left: pos.x,
+                      top: pos.y,
+                      width: pos.width,
+                      height: pos.height,
+                      background: `linear-gradient(135deg, ${pos.color}, ${pos.color}dd)`,
+                      borderColor: roomName === 'Electrical' ? '#ef4444' : '#06b6d4',
+                      boxShadow: `0 0 20px ${roomName === 'Electrical' ? '#ef444433' : '#06b6d433'}`,
+                      zIndex: 2
+                    }}
+                  >
+                    <div className="text-3xl mb-1">{roomEmojis[roomName] || '🏠'}</div>
+                    <div className="text-sm text-center px-2 text-shadow">{roomName}</div>
+                  </div>
+                );
+              })}
               
-              {/* Agents */}
+              {/* Crewmates */}
               {Object.entries(currentStepData.agents).map(([agentId, agentData]) => {
                 if (agentData.status === 'dead') {
                   const pos = roomPositions[agentData.location];
                   return (
                     <div
                       key={agentId}
-                      className="absolute border-4 border-red-800 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                      className="absolute flex items-center justify-center transition-all duration-1000"
                       style={{
-                        left: pos.x + 20,
-                        top: pos.y + 20,
-                        width: 30,
-                        height: 30,
-                        backgroundColor: '#666',
+                        left: pos.x + pos.width/2,
+                        top: pos.y + pos.height/2,
+                        width: 40,
+                        height: 40,
                         transform: 'translate(-50%, -50%)',
-                        zIndex: 3
+                        zIndex: 4
                       }}
                     >
-                      💀
+                      {/* Ghost effect */}
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gray-400 rounded-full opacity-50 animate-pulse"></div>
+                        <div className="relative w-10 h-10 bg-gray-600 rounded-full border-3 border-red-500 flex items-center justify-center">
+                          <span className="text-xl animate-bounce">👻</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 }
                 
                 const pos = roomPositions[agentData.location];
-                const agentOffset = Object.keys(currentStepData.agents).indexOf(agentId) * 35;
+                const agentsInRoom = Object.entries(currentStepData.agents).filter(([_, data]) => 
+                  data.location === agentData.location && data.status !== 'dead'
+                );
+                const agentIndex = agentsInRoom.findIndex(([id, _]) => id === agentId);
+                const totalInRoom = agentsInRoom.length;
+                
+                // Calculate position within room to spread agents evenly
+                const roomCenterX = pos.x + pos.width/2;
+                const roomCenterY = pos.y + pos.height/2;
+                
+                let offsetX = 0;
+                let offsetY = 0;
+                
+                if (totalInRoom > 1) {
+                  const spacing = 25;
+                  const startOffset = -(totalInRoom - 1) * spacing / 2;
+                  offsetX = startOffset + agentIndex * spacing;
+                  
+                  // If more than 3 agents, stack them in rows
+                  if (totalInRoom > 3) {
+                    const row = Math.floor(agentIndex / 3);
+                    const col = agentIndex % 3;
+                    offsetX = -(2 * spacing / 2) + col * spacing;
+                    offsetY = -spacing/2 + row * spacing;
+                  }
+                }
                 
                 return (
                   <div
                     key={agentId}
-                    className="absolute border-2 border-white rounded-full flex items-center justify-center text-white font-bold text-xs transition-all duration-1000"
+                    className="absolute flex items-center justify-center transition-all duration-1000 hover:scale-110"
                     style={{
-                      left: pos.x + 10 + agentOffset,
-                      top: pos.y + 10,
-                      width: 30,
-                      height: 30,
-                      backgroundColor: agentColors[agentId],
+                      left: roomCenterX + offsetX,
+                      top: roomCenterY + offsetY,
+                      width: 40,
+                      height: 40,
                       transform: 'translate(-50%, -50%)',
                       zIndex: 3
                     }}
                   >
-                    {agentId.charAt(0).toUpperCase()}
+                    {/* Among Us style crewmate */}
+                    <div 
+                      className="relative w-10 h-10 rounded-full border-3 border-white shadow-lg flex items-center justify-center font-black text-white text-sm transition-all"
+                      style={{
+                        backgroundColor: agentColors[agentId],
+                        boxShadow: `0 0 12px ${agentColors[agentId]}66`
+                      }}
+                    >
+                      {/* Visor effect */}
+                      <div className="absolute top-1 left-1 w-2 h-1.5 bg-white opacity-80 rounded-full"></div>
+                      <span className="text-shadow">{agentId.charAt(0).toUpperCase()}</span>
+                      
+                      {/* Impostor indicator */}
+                      {agentId === 'yellow' && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full border-2 border-white flex items-center justify-center">
+                          <span className="text-xs">👹</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
 
-              {/* Memory connections */}
-              {Object.entries(memoryAccess).map(([agentId, hasAccess]) => {
-                if (!hasAccess || currentStepData.agents[agentId]?.status === 'dead') return null;
-                
-                return Object.entries(memoryAccess).map(([otherId, otherAccess]) => {
-                  if (agentId === otherId || !otherAccess || currentStepData.agents[otherId]?.status === 'dead') return null;
-                  
-                  const pos1 = roomPositions[currentStepData.agents[agentId].location];
-                  const pos2 = roomPositions[currentStepData.agents[otherId].location];
-                  const offset1 = Object.keys(currentStepData.agents).indexOf(agentId) * 35;
-                  const offset2 = Object.keys(currentStepData.agents).indexOf(otherId) * 35;
-                  
-                  return (
-                    <svg
-                      key={`${agentId}-${otherId}`}
-                      className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                    >
-                      <line
-                        x1={pos1.x + 10 + offset1}
-                        y1={pos1.y + 10}
-                        x2={pos2.x + 10 + offset2}
-                        y2={pos2.y + 10}
-                        stroke="#00ff00"
-                        strokeWidth="4"
-                        strokeDasharray="5,5"
-                        opacity="0.8"
-                        className="transition-all duration-1000"
-                      />
-                    </svg>
-                  );
-                });
-              })}
             </div>
           </div>
+          )}
 
-          {/* Control Panel */}
-          <div className="space-y-4">
-            {/* Memory Access Controls */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-bold mb-3">
-                Memory Access Control
-                {currentStep > 0 && (
-                  <span className="text-sm font-normal text-gray-600 ml-2">(locked during game)</span>
-                )}
-              </h3>
-              <div className="flex flex-wrap gap-4">
-                {Object.entries(agentColors).map(([agentId, color]) => (
-                  <div key={agentId} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id={`memory-${agentId}`}
-                      checked={memoryAccess[agentId]}
-                      onChange={() => toggleMemoryAccess(agentId)}
-                      disabled={currentStep > 0}
-                      className="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <label 
-                      htmlFor={`memory-${agentId}`} 
-                      className={`flex items-center gap-2 ${currentStep > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    >
-                      <div
-                        className="w-4 h-4 rounded-full border"
-                        style={{backgroundColor: color}}
-                      />
-                      <span className="text-sm font-medium">
-                        {agentId} {agentId === 'yellow' ? '(impostor)' : ''}
-                      </span>
-                    </label>
+          {/* Mission Control Panel - Show current step info during simulation */}
+          {phase === 'simulation' && (
+          <div className="h-full flex flex-col min-h-0">
+            {/* Crew Activity Monitor */}
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-3 border-2 border-purple-500 shadow-2xl flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-center mb-2 flex-shrink-0">
+                <h3 className="text-lg font-bold text-purple-300">👥 CREW MONITOR 👥</h3>
+              </div>
+              <div className="space-y-2 flex-1 overflow-y-auto min-h-0">
+                {Object.entries(currentStepData.agents).map(([agentId, agentData]) => (
+                  <div key={agentId} className="bg-gray-700 rounded-lg p-2 border border-cyan-400">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div 
+                        className="w-6 h-6 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs"
+                        style={{backgroundColor: agentColors[agentId]}}
+                      >
+                        {agentId.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="font-bold text-cyan-300 text-sm capitalize">{agentId}</span>
+                      {agentId === 'yellow' && (
+                        <span className="bg-red-600 text-white px-1 py-0.5 rounded-full text-xs font-bold">👹 SUS</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-white bg-gray-800 rounded-lg p-1.5 mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-yellow-400">📍</span>
+                        <span className="text-purple-300 font-medium">{agentData.location}</span>
+                      </div>
+                      <div className="flex items-start gap-1.5 mt-0.5">
+                        <span className="text-green-400">⚡</span>
+                        <span className="text-gray-300">{agentData.action}</span>
+                      </div>
+                    </div>
+                    {agentData.met && agentData.met.length > 0 && (
+                      <div className="text-xs text-cyan-200 bg-blue-900 rounded-lg p-1.5">
+                        <span className="text-cyan-400 font-medium">👀 Witnessed:</span> {agentData.met.join(', ')}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Current Step Info */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-bold mb-3">Current Step Actions</h3>
-              {Object.entries(currentStepData.agents).map(([agentId, agentData]) => (
-                <div key={agentId} className="mb-2 text-sm">
-                  <span className="font-semibold" style={{color: agentColors[agentId]}}>
-                    {agentId}:
-                  </span>{' '}
-                  {agentData.action} in {agentData.location}
-                  {agentData.met && agentData.met.length > 0 && (
-                    <div className="text-xs text-gray-600 ml-4">
-                      Met: {agentData.met.join(', ')}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
+          )}
+
         </div>
 
-        {/* Emergency Meeting Panel - Below Map */}
-        {phase === 'emergency_meeting' && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-6">
-            <div className="text-center mb-6">
-              <h2 className="text-3xl font-bold text-red-800 mb-2">🚨 Emergency Meeting 🚨</h2>
-              <p className="text-lg text-red-600">Body found in Electrical! Discuss and find the impostor.</p>
+        {/* Emergency Meeting Panel - Full Height */}
+        {phase === 'emergency_meeting' && gameData && (
+          <div className="mt-4 bg-gradient-to-br from-red-900 via-red-800 to-red-900 border-2 border-red-400 rounded-xl p-4 shadow-2xl h-[calc(100vh-10rem)]">
+            <div className="text-center mb-3">
+              <h2 className="text-2xl font-black text-red-300 mb-1 animate-pulse tracking-wide">
+                🚨 EMERGENCY MEETING 🚨
+              </h2>
+              <div className="bg-gray-800 rounded-lg p-1.5 border border-yellow-400 inline-block">
+                <p className="text-xs text-yellow-300 font-bold">{gameData.message}</p>
+                <div className="text-xs text-cyan-300 mt-0.5 flex items-center justify-center gap-2">
+                  <span>🔢 Step {gameData.step_number} / {gameData.max_steps}</span>
+                  <span>💚 Alive: {gameData.agents.filter(a => a.is_alive).length} agents</span>
+                </div>
+                {gameData.winner && (
+                  <div className="mt-1 p-1 bg-green-800 rounded-lg border border-green-400">
+                    <p className="text-xs font-bold text-green-300">🏆 Winner: {gameData.winner} 🏆</p>
+                  </div>
+                )}
+              </div>
             </div>
             
-            {/* Chat Panel */}
-            <div className="bg-white rounded-lg border shadow-lg">
-              <div className="p-4 border-b bg-gray-50 rounded-t-lg">
-                <h3 className="text-xl font-semibold text-gray-800">Discussion</h3>
-                <p className="text-sm text-gray-600 mt-1">Agents are sharing their observations and suspicions</p>
-              </div>
-              <div className="p-6 space-y-4 max-h-96 overflow-y-auto">
-                {Object.entries(currentStepData.agents)
-                  .filter(([_, agentData]) => agentData.status !== 'dead')
-                  .map(([agentId, _]) => (
-                    <div key={agentId} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                      {/* Agent Avatar */}
-                      <div
-                        className="w-12 h-12 rounded-full border-3 border-white shadow-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                        style={{backgroundColor: agentColors[agentId]}}
-                      >
-                        {agentId.charAt(0).toUpperCase()}
+            {/* Layout: Emergency Status + Chat Side by Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 h-[calc(100%-6rem)]">
+              
+              {/* Emergency Status Panel */}
+              <div className="lg:col-span-1">
+                <div className="bg-gradient-to-br from-red-800 to-red-900 rounded-2xl p-2 border-2 border-red-400 shadow-xl h-full flex flex-col">
+                  <div className="text-center mb-1">
+                    <h3 className="text-xs font-bold text-red-300">🚨 CREW STATUS</h3>
+                  </div>
+                  <div className="space-y-0.5 flex-1 overflow-y-auto">
+                    {gameData.agents.map((agent) => (
+                      <div key={agent.id} className="bg-gray-800 rounded-lg p-1 border border-yellow-400">
+                        <div className="flex items-center gap-1">
+                          <div
+                            className="w-6 h-6 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0"
+                            style={{
+                              backgroundColor: getAgentColor(agent.color),
+                              boxShadow: `0 0 6px ${getAgentColor(agent.color)}66`
+                            }}
+                          >
+                            {agent.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-cyan-300 text-xs truncate">{agent.name}</div>
+                            <div className="flex gap-0.5 mt-0.5">
+                              {agent.is_impostor && (
+                                <span className="bg-red-600 text-white px-1 py-0.5 rounded text-xs font-bold leading-none">
+                                  👹
+                                </span>
+                              )}
+                              <span className={`px-1 py-0.5 rounded text-xs font-bold leading-none ${
+                                agent.is_alive 
+                                  ? 'bg-green-600 text-white' 
+                                  : 'bg-gray-600 text-white'
+                              }`}>
+                                {agent.is_alive ? '💚' : '👻'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      
-                      {/* Chat Message */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="font-bold text-lg" style={{color: agentColors[agentId]}}>
-                            {agentId}
-                          </span>
-                          {agentId === 'yellow' && (
-                            <span className="text-sm bg-red-100 text-red-600 px-3 py-1 rounded-full font-medium">
-                              impostor
-                            </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Chat Panel */}
+              <div className="lg:col-span-3">
+                <div className="bg-gray-900 rounded-xl border-2 border-cyan-400 shadow-2xl overflow-hidden h-full flex flex-col">
+                  <div className="p-2 border-b-2 border-cyan-400 bg-gradient-to-r from-gray-800 to-gray-700 flex-shrink-0">
+                    <div className="text-center">
+                      <h3 className="text-lg font-bold text-cyan-300 mb-0.5">💬 CREW DISCUSSION 💬</h3>
+                      <p className="text-xs text-cyan-200">AI Agents are sharing their observations and suspicions</p>
+                    </div>
+                  </div>
+                  <div 
+                    ref={chatContainerRef}
+                    className="p-2 space-y-2 flex-1 overflow-y-auto bg-gradient-to-b from-gray-800 to-gray-900 scrollbar-thin scrollbar-track-gray-700 scrollbar-thumb-cyan-400 hover:scrollbar-thumb-cyan-300"
+                    style={{
+                      scrollbarWidth: 'thin', 
+                      scrollbarColor: '#06b6d4 #374151',
+                      maxHeight: 'calc(100vh - 300px)' // Ensure it has a maximum height
+                    }}
+                  >
+                {gameData.conversation_history
+                  .filter(action => action.action_type === 'speak')
+                  .map((action, index) => {
+                    const agent = getAgentById(action.agent_id);
+                    if (!agent) return null;
+                    
+                    return (
+                      <div key={index} className="flex items-start gap-2 p-2 bg-gradient-to-r from-gray-700 to-gray-600 rounded-lg border border-cyan-400 shadow-lg">
+                        {/* Agent Avatar */}
+                        <div
+                          className="w-8 h-8 rounded-full border border-white shadow-xl flex items-center justify-center text-white font-black text-xs flex-shrink-0 relative"
+                          style={{
+                            backgroundColor: getAgentColor(agent.color),
+                            boxShadow: `0 0 8px ${getAgentColor(agent.color)}66`
+                          }}
+                        >
+                          {/* Visor effect */}
+                          <div className="absolute top-0.5 left-0.5 w-1.5 h-1 bg-white opacity-80 rounded-full"></div>
+                          {agent.name.charAt(0).toUpperCase()}
+                          
+                          {/* Impostor indicator */}
+                          {agent.is_impostor && (
+                            <div className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-600 rounded-full border border-white flex items-center justify-center animate-pulse">
+                              <span className="text-xs">👹</span>
+                            </div>
                           )}
-                          <span className="text-sm text-gray-400">now</span>
                         </div>
-                        <div className="text-base text-gray-700 leading-relaxed bg-white p-3 rounded-lg border">
-                          {generateReasoning(agentId)}
+                        
+                        {/* Chat Message */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="font-black text-sm text-cyan-300">
+                              {agent.name}
+                            </span>
+                            {agent.is_impostor && (
+                              <span className="bg-red-600 text-white px-1 py-0.5 rounded-full text-xs font-bold border border-red-400 animate-pulse">
+                                👹
+                              </span>
+                            )}
+                            <span className="text-xs text-yellow-400 bg-gray-800 px-1 py-0.5 rounded-full">
+                              Step {gameData.step_number}
+                            </span>
+                          </div>
+                          <div className="bg-gray-800 rounded-lg p-2 border border-purple-400 shadow-inner">
+                            <div className="text-xs text-white leading-relaxed font-medium">
+                              {action.content}
+                            </div>
+                          </div>
                         </div>
+                      </div>
+                    );
+                  })}
+                
+                {/* Show votes */}
+                {gameData.conversation_history
+                  .filter(action => action.action_type === 'vote')
+                  .map((action, index) => {
+                    const voter = getAgentById(action.agent_id);
+                    const target = action.target_agent_id ? getAgentById(action.target_agent_id) : null;
+                    if (!voter) return null;
+                    
+                    return (
+                      <div key={`vote-${index}`} className="p-2 bg-gradient-to-r from-yellow-800 to-orange-800 rounded-lg border border-yellow-400 shadow-lg">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <div
+                            className="w-5 h-5 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs"
+                            style={{backgroundColor: getAgentColor(voter.color)}}
+                          >
+                            {voter.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-bold text-yellow-300">
+                            {voter.name}
+                          </span>
+                          <span className="text-yellow-200 font-medium">voted to eliminate</span>
+                          {target && (
+                            <>
+                              <div
+                                className="w-5 h-5 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs"
+                                style={{backgroundColor: getAgentColor(target.color)}}
+                              >
+                                {target.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-bold text-red-300">
+                                {target.name}
+                              </span>
+                            </>
+                          )}
+                          <span className="text-sm">🗳️</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Subtle loading indicator when API is processing */}
+                  {loading && phase === 'emergency_meeting' && (
+                    <div className="flex items-center gap-1 p-2 bg-gray-700 rounded-lg border border-cyan-400 ml-auto max-w-fit">
+                      <div className="text-xs text-cyan-300">AI thinking</div>
+                      <div className="flex gap-0.5">
+                        <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                        <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                        <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                       </div>
                     </div>
-                  ))}
+                  )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
