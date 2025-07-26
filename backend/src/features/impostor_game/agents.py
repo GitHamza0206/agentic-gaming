@@ -15,20 +15,20 @@ class Crewmate:
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
         
-        # Create agent ID to name mapping
-        agent_names = {}
+        # Create agent ID to color mapping
+        agent_colors = {}
         if all_agents:
             for agent in all_agents:
-                agent_names[agent.id] = agent.name
+                agent_colors[agent.id] = agent.color
         
         # Format public chat history (what everyone can see)
         public_chat = []
         for action in public_action_history[-15:]:
-            agent_name = agent_names.get(action.agent_id, f"Agent{action.agent_id}")
-            action_text = f"{agent_name} {action.action_type.value}: {action.content}"
+            agent_color = agent_colors.get(action.agent_id, f"Agent{action.agent_id}")
+            action_text = f"{agent_color} {action.action_type.value}: {action.content}"
             if action.target_agent_id is not None:
-                target_name = agent_names.get(action.target_agent_id, f"Agent{action.target_agent_id}")
-                action_text += f" (targeting {target_name})"
+                target_color = agent_colors.get(action.target_agent_id, f"Agent{action.target_agent_id}")
+                action_text += f" (targeting {target_color})"
             public_chat.append(action_text)
         
         # Format private thoughts (only this agent's thoughts)
@@ -48,11 +48,11 @@ class Crewmate:
             alive_agents = [agent for agent in all_agents if agent.is_alive]
             dead_agents = [agent for agent in all_agents if not agent.is_alive]
             
-            alive_list = [f"{agent.name} ({agent.color})" for agent in alive_agents]
-            meeting_info = f"MEETING PARTICIPANTS: {', '.join(alive_list)} are present in this emergency meeting."
+            alive_list = [agent.color for agent in alive_agents]
+            meeting_info = f"MEETING PARTICIPANTS: {', '.join(alive_list)} are present in this investigation."
             
             if dead_agents:
-                dead_list = [f"{agent.name} ({agent.color})" for agent in dead_agents]
+                dead_list = [agent.color for agent in dead_agents]
                 meeting_info += f" ELIMINATED: {', '.join(dead_list)} have been eliminated and are not in the meeting."
             
             meeting_info += f" Total alive: {len(alive_agents)}/8 players remaining."
