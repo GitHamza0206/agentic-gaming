@@ -4,7 +4,11 @@ from typing import List, Dict, Optional
 from src.core.llm_client import LLMClient
 from .schema import (
     Agent, GameState, GameStatus, GamePhase, ActionType, AgentAction, AgentTurn, MeetingTrigger,
+<<<<<<< HEAD
+    InitGameResponse, StepResponse, GameStateResponse, AgentMemory
+=======
     InitGameResponse, StepResponse, GameStateResponse
+>>>>>>> main
 )
 from .agents import Crewmate, Impostor
 
@@ -20,7 +24,11 @@ class ImpostorGameService:
         else:
             return Crewmate(agent_data, self.llm_client)
     
+<<<<<<< HEAD
+    def create_game(self, num_players: int = 4) -> InitGameResponse:
+=======
     def create_game(self) -> InitGameResponse:
+>>>>>>> main
         game_id = str(uuid.uuid4())
         
         # Among Us style names and colors
@@ -28,17 +36,33 @@ class ImpostorGameService:
             ("Red", "red"), ("Blue", "blue"), ("Green", "green"), ("Pink", "pink"),
             ("Orange", "orange"), ("Yellow", "yellow"), ("Black", "black"), ("White", "white")
         ]
+<<<<<<< HEAD
+        
+        # Limit to requested number of players
+        selected_data = crewmates_data[:num_players]
+        agents = []
+        
+        for i, (name, color) in enumerate(selected_data):
+            agents.append(Agent(id=i, name=name, color=color, is_impostor=False))
+        
+        impostor_id = random.randint(0, num_players - 1)
+=======
         agents = []
         
         for i, (name, color) in enumerate(crewmates_data):
             agents.append(Agent(id=i, name=name, color=color, is_impostor=False))
         
         impostor_id = random.randint(0, 7)
+>>>>>>> main
         agents[impostor_id].is_impostor = True
         
         # Choose random meeting trigger and reporter
         meeting_trigger = random.choice([MeetingTrigger.DEAD_BODY, MeetingTrigger.EMERGENCY_BUTTON])
+<<<<<<< HEAD
+        reporter_id = random.randint(0, num_players - 1)
+=======
         reporter_id = random.randint(0, 7)
+>>>>>>> main
         
         if meeting_trigger == MeetingTrigger.DEAD_BODY:
             dead_colors = ["Purple", "Brown", "Cyan", "Lime"]  # Colors not in game
@@ -114,7 +138,12 @@ class ImpostorGameService:
                 phase=game.phase,
                 step_number=game.step_number,
                 max_steps=game.max_steps,
+<<<<<<< HEAD
+                turns=[],
+                conversation_history=game.public_action_history,
+=======
                 actions=[],
+>>>>>>> main
                 winner=game.winner,
                 game_over=True,
                 message="Game over"
@@ -140,7 +169,12 @@ class ImpostorGameService:
                 phase=game.phase,
                 step_number=game.step_number,
                 max_steps=game.max_steps,
+<<<<<<< HEAD
+                turns=[],
+                conversation_history=game.public_action_history,
+=======
                 actions=[],
+>>>>>>> main
                 winner=game.winner,
                 game_over=True,
                 message=message
@@ -150,6 +184,69 @@ class ImpostorGameService:
         alive_agents = self._get_alive_agents(game)
         step_turns = []
         
+<<<<<<< HEAD
+        # Generate turns for all alive agents
+        context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
+        if game.step_number == 1:
+            context = f"{context_base} There is an impostor among you!"
+        else:
+            context = f"{context_base} Find the impostor!"
+        
+        for agent_data in alive_agents:
+            agent = self._create_agent(agent_data)
+            
+            # Get agent's private thoughts
+            private_thoughts = game.private_thoughts.get(agent_data.id, [])
+            
+            # Add special context for reporter in first step
+            agent_context = context
+            if game.step_number == 1 and agent_data.id == game.reporter_id:
+                agent_context = f"{context} You are the one who called this meeting because: {game.meeting_reason}"
+            
+            turn = agent.choose_action(agent_context, game.public_action_history, private_thoughts, game.step_number, game.agents)
+            step_turns.append(turn)
+            
+            # Save memory update to persistent agent data (if not already added by agent)
+            if turn.memory_update and (not agent_data.memory_history or agent_data.memory_history[-1] != turn.memory_update):
+                agent_data.memory_history.append(turn.memory_update)
+            
+            # Process the turn - store think privately
+            if agent_data.id not in game.private_thoughts:
+                game.private_thoughts[agent_data.id] = []
+            game.private_thoughts[agent_data.id].append(AgentAction(
+                agent_id=agent_data.id,
+                action_type=ActionType.THINK,
+                content=turn.think,
+                target_agent_id=None
+            ))
+        
+        # After all agents have generated their turns, randomly select one speaker
+        agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
+        if agents_who_want_to_speak:
+            chosen_speaker = random.choice(agents_who_want_to_speak)
+            game.public_action_history.append(AgentAction(
+                agent_id=chosen_speaker.agent_id,
+                action_type=ActionType.SPEAK,
+                content=chosen_speaker.speak,
+                target_agent_id=None
+            ))
+        
+        # Now process all votes
+        for turn in step_turns:
+            if turn.vote is not None:
+                game.public_action_history.append(AgentAction(
+                    agent_id=turn.agent_id,
+                    action_type=ActionType.VOTE,
+                    content=f"I vote to eliminate Agent{turn.vote}",
+                    target_agent_id=turn.vote
+                ))
+                
+                # Count the vote
+                if turn.vote in game.current_votes:
+                    game.current_votes[turn.vote] += 1
+                else:
+                    game.current_votes[turn.vote] = 1
+=======
         # Special context for the first step where reporter speaks first
         if game.step_number == 1:
             reporter = next(a for a in game.agents if a.id == game.reporter_id)
@@ -273,6 +370,7 @@ class ImpostorGameService:
                         game.current_votes[turn.vote] += 1
                     else:
                         game.current_votes[turn.vote] = 1
+>>>>>>> main
         
         # Check for elimination (if someone has majority votes)
         total_alive = len(alive_agents)
@@ -324,8 +422,20 @@ class ImpostorGameService:
             step_number=game.step_number - 1,  # Show the step that just completed
             max_steps=game.max_steps,
             turns=step_turns,
+<<<<<<< HEAD
+            conversation_history=game.public_action_history,
+=======
+>>>>>>> main
             eliminated=eliminated_agent.name if eliminated_agent else None,
             winner=winner,
             game_over=game_over,
             message=message
+<<<<<<< HEAD
         )
+    
+    def process_step(self, game_id: str) -> Optional[StepResponse]:
+        """Alias for step_game to maintain compatibility with tests"""
+        return self.step_game(game_id)
+=======
+        )
+>>>>>>> main

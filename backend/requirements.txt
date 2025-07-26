@@ -1,4 +1,4 @@
-cerebras-cloud-sdk
+anthropic
 python-dotenv
 
 anyio
@@ -28,3 +28,8 @@ langsmith==0.1.63
 language_data==1.2.0
 stripe==11.6.0
 langchain_community
+
+# Testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0
