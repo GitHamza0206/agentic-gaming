@@ -244,7 +244,7 @@ const AmongUsSimulation = () => {
   const currentStepData = gameScenario[currentStep] || gameScenario[0];
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden">
+    <div className="w-full h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden flex flex-col">
       {/* Space background elements */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-10 left-10 w-2 h-2 bg-white rounded-full animate-pulse"></div>
@@ -254,22 +254,22 @@ const AmongUsSimulation = () => {
         <div className="absolute bottom-1/3 right-10 w-2 h-2 bg-purple-300 rounded-full animate-pulse"></div>
       </div>
       
-      <div className="relative z-10 w-full max-w-[95vw] mx-auto p-4">
-        <div className="bg-gray-900 rounded-3xl shadow-2xl border-4 border-cyan-400 p-8"
+      <div className="relative z-10 w-full max-w-[95vw] mx-auto p-2 h-full flex flex-col">
+        <div className="bg-gray-900 rounded-xl shadow-2xl border-2 border-cyan-400 p-4 flex-1 flex flex-col overflow-hidden"
              style={{background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'}}>
         {/* Loading State */}
         {loading && (
-          <div className="text-center py-12">
-            <div className="inline-block w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-            <div className="text-xl text-cyan-300 mt-4 font-bold">Loading Crewmates...</div>
+          <div className="text-center py-6">
+            <div className="inline-block w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-lg text-cyan-300 mt-2 font-bold">Loading Crewmates...</div>
           </div>
         )}
         
         {/* Error State */}
         {error && (
-          <div className="bg-red-900 border-2 border-red-400 text-red-200 px-6 py-4 rounded-2xl mb-6 border-dashed">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">⚠️</span>
+          <div className="bg-red-900 border border-red-400 text-red-200 px-4 py-2 rounded-lg mb-3 border-dashed">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⚠️</span>
               <div>
                 <strong className="font-bold text-red-300">Emergency Alert:</strong> {error}
               </div>
@@ -280,26 +280,26 @@ const AmongUsSimulation = () => {
         {/* Header and Controls - Hidden during emergency meeting */}
         {phase === 'simulation' && (
           <>
-            <div className="text-center mb-8">
-              <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 mb-4 tracking-wide">
+            <div className="text-center mb-4">
+              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 mb-2 tracking-wide">
                 🚀 AMONG US 🛸
               </h1>
-              <p className="text-xl text-cyan-300 font-bold">Multi-Agent AI Space Mission</p>
+              <p className="text-lg text-cyan-300 font-bold">Multi-Agent AI Space Mission</p>
             </div>
             
             {/* Controls */}
-            <div className="flex justify-center items-center gap-6 mb-8">
+            <div className="flex justify-center items-center gap-4 mb-4">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className={`group relative overflow-hidden px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg ${
+                className={`group relative overflow-hidden px-6 py-3 rounded-lg font-bold text-sm transition-all transform hover:scale-105 shadow-lg ${
                   isPlaying 
-                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-2 border-red-400' 
-                    : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border-2 border-green-400'
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border border-red-400' 
+                    : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border border-green-400'
                 }`}
                 disabled={loading || (gameData && gameData.game_over)}
               >
-                <div className="flex items-center gap-3">
-                  {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                <div className="flex items-center gap-2">
+                  {isPlaying ? <Pause size={16} /> : <Play size={16} />}
                   {isPlaying ? '⏸️ PAUSE MISSION' : '▶️ START MISSION'}
                 </div>
                 <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
@@ -307,11 +307,11 @@ const AmongUsSimulation = () => {
               
               <button
                 onClick={resetSimulation}
-                className="group relative overflow-hidden px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold text-lg rounded-2xl transition-all transform hover:scale-105 shadow-lg border-2 border-blue-400"
+                className="group relative overflow-hidden px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold text-sm rounded-lg transition-all transform hover:scale-105 shadow-lg border border-blue-400"
                 disabled={loading}
               >
-                <div className="flex items-center gap-3">
-                  <RotateCcw size={20} />
+                <div className="flex items-center gap-2">
+                  <RotateCcw size={16} />
                   🔄 RESET SHIP
                 </div>
                 <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
@@ -319,18 +319,18 @@ const AmongUsSimulation = () => {
             </div>
             
             {/* Mission Status */}
-            <div className="text-center mb-6">
-              <div className="inline-block bg-gray-800 border-2 border-cyan-400 rounded-2xl px-8 py-4">
-                <div className="text-2xl font-bold text-cyan-300 mb-2">
+            <div className="text-center mb-3">
+              <div className="inline-block bg-gray-800 border border-cyan-400 rounded-lg px-4 py-2">
+                <div className="text-lg font-bold text-cyan-300 mb-1">
                   🌌 MISSION STATUS 🌌
                 </div>
-                <div className="text-lg text-white">
+                <div className="text-sm text-white">
                   <span className="text-cyan-400 font-bold">Step:</span> {currentStep}/30 | 
                   <span className="text-purple-400 font-bold ml-2">Phase:</span> {phase === 'simulation' ? '🚀 Simulation' : '🚨 Emergency Meeting'}
                 </div>
                 {gameData && (
-                  <div className="mt-3 p-3 bg-blue-900 rounded-xl border border-blue-500">
-                    <p className="text-cyan-200 font-medium">{gameData.message}</p>
+                  <div className="mt-2 p-2 bg-blue-900 rounded-lg border border-blue-500">
+                    <p className="text-xs text-cyan-200 font-medium">{gameData.message}</p>
                   </div>
                 )}
               </div>
@@ -338,13 +338,13 @@ const AmongUsSimulation = () => {
           </>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-3 gap-4 flex-1 min-h-0">
             {/* Space Ship Map - Hidden during emergency meeting */}
             {phase === 'simulation' && (
-            <div className="xl:col-span-3 lg:col-span-2">
-              <div className="bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-3xl p-4 relative border-4 border-cyan-500 shadow-2xl overflow-hidden" style={{height: '450px', minHeight: '400px'}}>
-                <div className="flex items-center justify-center mb-4">
-                  <h3 className="text-2xl font-bold text-cyan-300 tracking-wide">🛸 THE SKELD 🛸</h3>
+            <div className="xl:col-span-3 lg:col-span-2 min-h-0">
+              <div className="bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-xl p-3 relative border-2 border-cyan-500 shadow-2xl overflow-hidden h-full">
+                <div className="flex items-center justify-center mb-2">
+                  <h3 className="text-lg font-bold text-cyan-300 tracking-wide">🛸 THE SKELD 🛸</h3>
                 </div>
               
               {/* Space corridors between rooms */}
@@ -505,39 +505,39 @@ const AmongUsSimulation = () => {
 
           {/* Mission Control Panel - Show current step info during simulation */}
           {phase === 'simulation' && (
-          <div className="space-y-6">
+          <div className="h-full flex flex-col min-h-0">
             {/* Crew Activity Monitor */}
-            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-6 border-4 border-purple-500 shadow-2xl">
-              <div className="flex items-center justify-center mb-4">
-                <h3 className="text-2xl font-bold text-purple-300">👥 CREW MONITOR 👥</h3>
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-3 border-2 border-purple-500 shadow-2xl flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-center mb-2 flex-shrink-0">
+                <h3 className="text-lg font-bold text-purple-300">👥 CREW MONITOR 👥</h3>
               </div>
-              <div className="space-y-3 max-h-80 overflow-y-auto">
+              <div className="space-y-2 flex-1 overflow-y-auto min-h-0">
                 {Object.entries(currentStepData.agents).map(([agentId, agentData]) => (
-                  <div key={agentId} className="bg-gray-700 rounded-2xl p-3 border-2 border-cyan-400">
-                    <div className="flex items-center gap-3 mb-2">
+                  <div key={agentId} className="bg-gray-700 rounded-lg p-2 border border-cyan-400">
+                    <div className="flex items-center gap-2 mb-1">
                       <div 
-                        className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center font-bold text-white text-sm"
+                        className="w-6 h-6 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs"
                         style={{backgroundColor: agentColors[agentId]}}
                       >
                         {agentId.charAt(0).toUpperCase()}
                       </div>
-                      <span className="font-bold text-cyan-300 text-lg capitalize">{agentId}</span>
+                      <span className="font-bold text-cyan-300 text-sm capitalize">{agentId}</span>
                       {agentId === 'yellow' && (
-                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-bold">👹 SUS</span>
+                        <span className="bg-red-600 text-white px-1 py-0.5 rounded-full text-xs font-bold">👹 SUS</span>
                       )}
                     </div>
-                    <div className="text-sm text-white bg-gray-800 rounded-xl p-2 mb-2">
-                      <div className="flex items-center gap-2">
+                    <div className="text-xs text-white bg-gray-800 rounded-lg p-1.5 mb-1">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-yellow-400">📍</span>
                         <span className="text-purple-300 font-medium">{agentData.location}</span>
                       </div>
-                      <div className="flex items-start gap-2 mt-1">
+                      <div className="flex items-start gap-1.5 mt-0.5">
                         <span className="text-green-400">⚡</span>
                         <span className="text-gray-300">{agentData.action}</span>
                       </div>
                     </div>
                     {agentData.met && agentData.met.length > 0 && (
-                      <div className="text-xs text-cyan-200 bg-blue-900 rounded-lg p-2">
+                      <div className="text-xs text-cyan-200 bg-blue-900 rounded-lg p-1.5">
                         <span className="text-cyan-400 font-medium">👀 Witnessed:</span> {agentData.met.join(', ')}
                       </div>
                     )}
@@ -546,35 +546,6 @@ const AmongUsSimulation = () => {
               </div>
             </div>
 
-            {/* Mission Progress */}
-            <div className="bg-gradient-to-br from-blue-800 to-indigo-900 rounded-3xl p-6 border-4 border-cyan-400 shadow-2xl">
-              <div className="text-center mb-4">
-                <h3 className="text-2xl font-bold text-cyan-300">🎯 MISSION PROGRESS 🎯</h3>
-              </div>
-              <div className="text-center">
-                {currentStep < 25 ? (
-                  <div className="space-y-3">
-                    <div className="bg-gray-800 rounded-2xl p-4 border-2 border-green-400">
-                      <div className="text-lg font-bold text-green-400 mb-2">🎬 SIMULATION PHASE</div>
-                      <div className="text-sm text-green-300">Monitoring crew activities...</div>
-                      <div className="mt-2 bg-green-900 rounded-lg p-2">
-                        <div className="text-xs text-green-200">Progress: {currentStep}/24 steps</div>
-                      </div>
-                    </div>
-                    <div className="bg-gray-800 rounded-2xl p-4 border-2 border-yellow-400">
-                      <div className="text-lg font-bold text-yellow-400 mb-2">🚨 NEXT PHASE</div>
-                      <div className="text-sm text-yellow-300">Emergency Meeting at Step 25</div>
-                      <div className="text-xs text-yellow-200 mt-1">🤖 AI Discussion Mode</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-red-900 rounded-2xl p-4 border-2 border-red-400">
-                    <div className="text-lg font-bold text-red-300 mb-2">🚨 EMERGENCY ACTIVE 🚨</div>
-                    <div className="text-sm text-red-200">AI agents are discussing!</div>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
           )}
 
@@ -749,6 +720,18 @@ const AmongUsSimulation = () => {
                       </div>
                     );
                   })}
+                  
+                  {/* Subtle loading indicator when API is processing */}
+                  {loading && phase === 'emergency_meeting' && (
+                    <div className="flex items-center gap-1 p-2 bg-gray-700 rounded-lg border border-cyan-400 ml-auto max-w-fit">
+                      <div className="text-xs text-cyan-300">AI thinking</div>
+                      <div className="flex gap-0.5">
+                        <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+                        <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                        <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                      </div>
+                    </div>
+                  )}
                   </div>
                 </div>
               </div>
