@@ -55,15 +55,14 @@ class ImpostorGameService:
         agents = []
         impostor_id = None
         
-        color_to_id = {}
-        for i, (color, agent_data) in enumerate(first_step["agents"].items()):
+        for color, agent_data in first_step["agents"].items():
             # Check if this agent is the impostor based on actions containing "pretends" or "fake"
             is_impostor = "pretend" in agent_data["action"].lower() or "fake" in agent_data["action"].lower()
             if is_impostor:
-                impostor_id = i
+                impostor_id = color
             
             agent = Agent(
-                id=i,
+                id=color,  # Use color as ID
                 name=color.capitalize(),
                 color=color,
                 is_impostor=is_impostor,
@@ -73,20 +72,20 @@ class ImpostorGameService:
                 met=agent_data["met"]
             )
             agents.append(agent)
-            color_to_id[color] = i
         
         # Determine meeting details from the last step
         meeting_trigger = MeetingTrigger.DEAD_BODY  # Based on the game-master data ending
         
         # Find who discovered the body (red in the last step)
-        reporter_id = color_to_id.get("red", 0)
-        meeting_reason = f"{agents[reporter_id].name} found Green's body in Electrical"
+        reporter_id = "red"
+        reporter_agent = next((a for a in agents if a.id == reporter_id), agents[0])
+        meeting_reason = f"{reporter_agent.name} found Green's body in Electrical"
         
         # Mark Green as dead based on game-master data
-        green_id = color_to_id.get("green")
-        if green_id is not None:
-            agents[green_id].is_alive = False
-            agents[green_id].action = "DEAD"
+        green_agent = next((a for a in agents if a.id == "green"), None)
+        if green_agent is not None:
+            green_agent.is_alive = False
+            green_agent.action = "DEAD"
         
         game_state = GameState(
             game_id=game_id,
@@ -97,7 +96,7 @@ class ImpostorGameService:
             agents=agents,
             public_action_history=[],
             private_thoughts={},
-            impostor_id=impostor_id if impostor_id is not None else 0,
+            impostor_id=impostor_id if impostor_id is not None else "yellow",
             meeting_trigger=meeting_trigger,
             reporter_id=reporter_id,
             meeting_reason=meeting_reason
@@ -109,9 +108,9 @@ class ImpostorGameService:
             game_id=game_id,
             message=f"EMERGENCY MEETING! {meeting_reason}",
             agents=agents,
-            impostor_revealed=f"The impostor is: {agents[impostor_id].name} ({agents[impostor_id].color})" if impostor_id is not None else "Unknown impostor",
+            impostor_revealed=f"The impostor is: {impostor_id}" if impostor_id is not None else "Unknown impostor",
             meeting_trigger=meeting_trigger,
-            reporter_name=agents[reporter_id].name,
+            reporter_name=reporter_agent.name,
             meeting_reason=meeting_reason
         )
     

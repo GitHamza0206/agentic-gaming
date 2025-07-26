@@ -24,7 +24,7 @@ class MeetingTrigger(str, Enum):
     EMERGENCY_BUTTON = "emergency_button"
 
 class Agent(BaseModel):
-    id: int
+    id: str  # Use color as ID: "red", "blue", "green", "yellow"
     name: str
     color: str
     is_impostor: bool = False
@@ -36,10 +36,10 @@ class Agent(BaseModel):
     met: List[str] = []  # Agents met in current step
 
 class AgentAction(BaseModel):
-    agent_id: int
+    agent_id: str  # Agent color: "red", "blue", "green", "yellow"
     action_type: ActionType
     content: str
-    target_agent_id: Optional[int] = None
+    target_agent_id: Optional[str] = None  # Target agent color
 
 class AgentMemory(BaseModel):
     step_number: int
@@ -48,11 +48,11 @@ class AgentMemory(BaseModel):
     met: List[str] = []  # Who they met (agent colors/names)
     
 class AgentTurn(BaseModel):
-    agent_id: int
+    agent_id: str  # Agent color: "red", "blue", "green", "yellow"
     think: str  # Always required - agent's private thoughts
     speak: Optional[str] = None  # Optional - public statement
-    vote: Optional[int] = None  # Optional - vote target agent_id
-    impostor_hypothesis: Optional[int] = None  # Agent's current suspicion of who the impostor is
+    vote: Optional[str] = None  # Optional - vote target agent color
+    impostor_hypothesis: Optional[str] = None  # Agent's current suspicion (agent color)
     memory_update: Optional['AgentMemory'] = None  # Memory from this step
 
 class GameState(BaseModel):
@@ -63,12 +63,12 @@ class GameState(BaseModel):
     max_steps: int = 30
     agents: List[Agent]
     public_action_history: List[AgentAction]  # Only SPEAK and VOTE actions
-    private_thoughts: Dict[int, List[AgentAction]] = {}  # THINK actions per agent
-    current_votes: Dict[int, int] = {}
+    private_thoughts: Dict[str, List[AgentAction]] = {}  # THINK actions per agent (by color)
+    current_votes: Dict[str, int] = {}  # votes for each agent color
     winner: Optional[str] = None
-    impostor_id: int
+    impostor_id: str  # impostor agent color
     meeting_trigger: MeetingTrigger
-    reporter_id: int
+    reporter_id: str  # reporter agent color
     meeting_reason: str
 
 class InitGameResponse(BaseModel):
