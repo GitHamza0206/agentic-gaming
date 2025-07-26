@@ -10,7 +10,7 @@ class Crewmate:
         self.llm_client = llm_client
     
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. An emergency meeting has been called. There is an impostor among you and your goal is to find them before they eliminate everyone. Analyze suspicious behaviors, ask relevant questions, and vote to eliminate the impostor."
+        return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. You are currently in an EMERGENCY MEETING discussing who the impostor is. Someone found a dead body, so now everyone is gathered at the meeting table to debate and vote. Your goal is to find the impostor before they eliminate everyone. Share what you saw, analyze others' stories for inconsistencies, and vote to eliminate the impostor."
     
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
@@ -63,25 +63,26 @@ class Crewmate:
             {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context} \\n{meeting_info}"},
             {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": f"""You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote.
+            {"role": "user", "content": f"""You are currently in an EMERGENCY MEETING at the meeting table discussing who the impostor is. Respond in JSON format for this discussion turn.
 
-Current situation - Location: {self.data.location}, Action: {self.data.action}, Met: {', '.join(self.data.met) if self.data.met else 'no one'}
+WHAT YOU WERE DOING BEFORE THE MEETING: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
 
 """ + """{
-  "think": "your private thoughts and analysis (always required, detailed)",
-  "speak": "short public statement to other crewmates (optional, null if you don't speak)",
+  "think": "your private analysis of the situation and other players (always required)",
+  "speak": "what you say to the group about what you observed or your suspicions (optional, null if silent)",
   "vote": agent_ID_number (optional, null if you don't vote),
 }
 
 Examples:
-{"think": "Red seems suspicious based on their defensive behavior", "speak": null, "vote": null}
-{"think": "Blue's story doesn't match", "speak": "Blue, you said you were in electrical", "vote": null}
+{"think": "Red's story doesn't match what I saw - they claim they were alone but I saw them with Blue", "speak": "I was doing navigation tasks and saw Red and Blue together in Electrical", "vote": null}
+{"think": "Yellow's timeline is suspicious, they're probably the impostor", "speak": "Yellow, you said you were in Cafeteria but the body was found in Electrical", "vote": 3}
 
 IMPORTANT: 
-- "think" = your private thoughts (always required)
-- "speak" = public statement (optional, null if silent)  
-- "vote" = agent ID to eliminate (optional, null otherwise)
-- Keep "speak" SHORT and direct
+- This is a DISCUSSION about what happened BEFORE the meeting
+- Share what you observed and analyze others' stories for contradictions
+- "think" = your private analysis (always required)
+- "speak" = what you tell the group (optional)
+- "vote" = agent ID to eliminate (optional)
 - Respond with valid JSON only!"""}
         ]
         
@@ -193,7 +194,7 @@ IMPORTANT:
 
 class Impostor(Crewmate):
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. An emergency meeting has been called. Your goal is to avoid being discovered. You must act like an innocent crewmate, deny any accusations, and try to redirect suspicion toward others. Be subtle and convincing. NEVER reveal that you are the impostor."
+        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. You are currently in an EMERGENCY MEETING at the meeting table. Someone found a dead body and now everyone is discussing who the impostor is. Your goal is to avoid being discovered and eliminated. Act like an innocent crewmate, provide believable alibis, deflect suspicion toward others, and never reveal that you are the impostor. Be strategic and convincing."
     
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
