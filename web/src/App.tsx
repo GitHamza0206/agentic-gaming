@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 
 interface Agent {
-  id: number;
+  id: string;
   name: string;
   color: string;
   is_impostor: boolean;
@@ -10,17 +10,19 @@ interface Agent {
 }
 
 interface AgentAction {
-  agent_id: number;
+  agent_id: string;
   action_type: string;
   content: string;
-  target_agent_id?: number;
+  target_agent_id?: string;
+  audio_base64?: string;
 }
 
 interface AgentTurn {
-  agent_id: number;
+  agent_id: string;
   think: string;
   speak?: string;
-  vote?: number;
+  vote?: string;
+  audio_base64?: string;
 }
 
 interface GameData {
@@ -42,9 +44,84 @@ const AmongUsSimulation = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [currentPlayingAudio, setCurrentPlayingAudio] = useState<string | null>(null);
+  const [audioQueue, setAudioQueue] = useState<Array<{id: string, audioBase64: string}>>([]);
+  const [isPlayingQueue, setIsPlayingQueue] = useState(false);
 
   // API Configuration
   const API_BASE = 'http://localhost:8000';
+
+  // Add audio to queue
+  const addToAudioQueue = (audioBase64: string, messageId: string) => {
+    setAudioQueue(prev => [...prev, { id: messageId, audioBase64 }]);
+  };
+
+  // Process audio queue - play only the next item
+  const processAudioQueue = async () => {
+    if (isPlayingQueue || audioQueue.length === 0 || currentPlayingAudio) return;
+    
+    setIsPlayingQueue(true);
+    
+    const nextAudio = audioQueue[0];
+    setAudioQueue(prev => prev.slice(1));
+    
+    try {
+      await playAudioFromQueue(nextAudio.audioBase64, nextAudio.id);
+      // Small delay before processing next item
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (error) {
+      console.error('Error playing queued audio:', error);
+    }
+    
+    setIsPlayingQueue(false);
+  };
+
+  // Audio playback function for queue
+  const playAudioFromQueue = async (audioBase64: string, messageId: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      try {
+        setCurrentPlayingAudio(messageId);
+        
+        // Convert base64 to blob
+        const audioData = atob(audioBase64);
+        const arrayBuffer = new ArrayBuffer(audioData.length);
+        const uint8Array = new Uint8Array(arrayBuffer);
+        for (let i = 0; i < audioData.length; i++) {
+          uint8Array[i] = audioData.charCodeAt(i);
+        }
+        
+        const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        const audio = new Audio(audioUrl);
+        audio.onended = () => {
+          setCurrentPlayingAudio(null);
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        audio.onerror = () => {
+          setCurrentPlayingAudio(null);
+          URL.revokeObjectURL(audioUrl);
+          console.error('Error playing audio');
+          reject(new Error('Audio playback failed'));
+        };
+        
+        audio.play().catch(reject);
+      } catch (error) {
+        console.error('Error playing audio:', error);
+        setCurrentPlayingAudio(null);
+        reject(error);
+      }
+    });
+  };
+
+  // Manual play audio function (for button clicks)
+  const playAudio = async (audioBase64: string, messageId: string) => {
+    // Clear queue and play immediately
+    setAudioQueue([]);
+    setIsPlayingQueue(false);
+    await playAudioFromQueue(audioBase64, messageId);
+  };
 
   // Initialize game
   const initializeGame = async () => {
@@ -102,16 +179,23 @@ const AmongUsSimulation = () => {
       
       const data = await response.json();
       console.log('stepGame response:', data);
+      console.log('stepGame conversation_history:', data.conversation_history);
+      console.log('stepGame conversation_history length:', data.conversation_history?.length);
       
       // Update game data with new information - accumulate conversation history
-      setGameData(prevGameData => ({
-        ...prevGameData!,
-        conversation_history: data.conversation_history || prevGameData!.conversation_history,
-        step_number: data.step_number,
-        game_over: data.game_over || false,
-        winner: data.winner,
-        message: data.message || 'Step completed'
-      }));
+      setGameData(prevGameData => {
+        console.log('Previous gameData:', prevGameData);
+        const newGameData = {
+          ...prevGameData!,
+          conversation_history: data.conversation_history || prevGameData!.conversation_history,
+          step_number: data.step_number,
+          game_over: data.game_over || false,
+          winner: data.winner,
+          message: data.message || 'Step completed'
+        };
+        console.log('New gameData:', newGameData);
+        return newGameData;
+      });
       
       // Check if game should end
       if (data.game_over) {
@@ -262,12 +346,41 @@ const AmongUsSimulation = () => {
     }
   }, [gameData?.conversation_history?.length]);
 
+  // Auto-add audio to queue for new messages (only if not currently playing)
+  useEffect(() => {
+    if (gameData?.conversation_history && gameData.conversation_history.length > 0) {
+      const latestMessage = gameData.conversation_history[gameData.conversation_history.length - 1];
+      if (latestMessage.action_type === 'speak' && latestMessage.audio_base64) {
+        const messageId = `message-${gameData.conversation_history.length - 1}`;
+        
+        // Only start playing if nothing is currently playing or queued
+        if (!currentPlayingAudio && !isPlayingQueue && audioQueue.length === 0) {
+          // Play immediately
+          playAudioFromQueue(latestMessage.audio_base64, messageId);
+        } else {
+          // Add to queue
+          addToAudioQueue(latestMessage.audio_base64, messageId);
+        }
+      }
+    }
+  }, [gameData?.conversation_history?.length]);
+
+  // Process audio queue when current audio finishes
+  useEffect(() => {
+    if (!currentPlayingAudio && !isPlayingQueue && audioQueue.length > 0) {
+      processAudioQueue();
+    }
+  }, [currentPlayingAudio, audioQueue.length]);
+
   const resetSimulation = () => {
     setCurrentStep(0);
     setIsPlaying(false);
     setPhase('simulation');
     setGameData(null); // Clear API data
     setError(null);
+    setAudioQueue([]); // Clear audio queue
+    setCurrentPlayingAudio(null);
+    setIsPlayingQueue(false);
   };
 
   // Map agent colors to hex values
@@ -286,7 +399,7 @@ const AmongUsSimulation = () => {
   };
 
   // Get agent by ID
-  const getAgentById = (id: number) => {
+  const getAgentById = (id: string) => {
     return gameData?.agents.find(agent => agent.id === id);
   };
 
@@ -602,7 +715,7 @@ const AmongUsSimulation = () => {
 
         {/* Emergency Meeting Panel - Full Height */}
         {phase === 'emergency_meeting' && gameData && (
-          <div className="mt-4 bg-gradient-to-br from-red-900 via-red-800 to-red-900 border-2 border-red-400 rounded-xl p-4 shadow-2xl h-[calc(100vh-10rem)]">
+          <div className="mt-4 bg-gradient-to-br from-red-900 via-red-800 to-red-900 border-2 border-red-400 rounded-xl p-4 shadow-2xl h-[calc(100vh-12rem)] max-h-[800px]">
             <div className="text-center mb-3">
               <h2 className="text-2xl font-black text-red-300 mb-1 animate-pulse tracking-wide">
                 🚨 EMERGENCY MEETING 🚨
@@ -622,7 +735,7 @@ const AmongUsSimulation = () => {
             </div>
             
             {/* Layout: Emergency Status + Chat Side by Side */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 h-[calc(100%-6rem)]">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 h-[calc(100%-6rem)] min-h-0">
               
               {/* Emergency Status Panel */}
               <div className="lg:col-span-1">
@@ -668,7 +781,7 @@ const AmongUsSimulation = () => {
               </div>
 
               {/* Chat Panel */}
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-3 min-h-0">
                 <div className="bg-gray-900 rounded-xl border-2 border-cyan-400 shadow-2xl overflow-hidden h-full flex flex-col">
                   <div className="p-2 border-b-2 border-cyan-400 bg-gradient-to-r from-gray-800 to-gray-700 flex-shrink-0">
                     <div className="text-center">
@@ -682,14 +795,19 @@ const AmongUsSimulation = () => {
                     style={{
                       scrollbarWidth: 'thin', 
                       scrollbarColor: '#06b6d4 #374151',
-                      maxHeight: 'calc(100vh - 300px)' // Ensure it has a maximum height
+                      height: '0', // Force flex-1 to respect parent bounds
+                      minHeight: '200px' // Minimum usable height
                     }}
                   >
                 {gameData.conversation_history
                   .filter(action => action.action_type === 'speak')
                   .map((action, index) => {
+                    console.log('Rendering message:', action);
                     const agent = getAgentById(action.agent_id);
-                    if (!agent) return null;
+                    if (!agent) {
+                      console.log('No agent found for ID:', action.agent_id);
+                      return null;
+                    }
                     
                     return (
                       <div key={index} className="flex items-start gap-2 p-2 bg-gradient-to-r from-gray-700 to-gray-600 rounded-lg border border-cyan-400 shadow-lg">
@@ -727,6 +845,28 @@ const AmongUsSimulation = () => {
                             <span className="text-xs text-yellow-400 bg-gray-800 px-1 py-0.5 rounded-full">
                               Step {gameData.step_number}
                             </span>
+                            {/* Audio button */}
+                            {action.audio_base64 && (
+                              <button
+                                onClick={() => playAudio(action.audio_base64!, `message-${index}`)}
+                                className={`w-6 h-6 rounded-full border border-cyan-400 flex items-center justify-center text-xs transition-all hover:scale-110 ${
+                                  currentPlayingAudio === `message-${index}` 
+                                    ? 'bg-cyan-400 text-gray-900 animate-pulse' 
+                                    : 'bg-gray-700 text-cyan-400 hover:bg-cyan-400 hover:text-gray-900'
+                                }`}
+                                title={currentPlayingAudio === `message-${index}` ? "Playing..." : "Play audio"}
+                                disabled={isPlayingQueue && currentPlayingAudio !== `message-${index}`}
+                              >
+                                {currentPlayingAudio === `message-${index}` ? '🔊' : '▶️'}
+                              </button>
+                            )}
+                            
+                            {/* Queue indicator */}
+                            {isPlayingQueue && audioQueue.some(item => item.id === `message-${index}`) && (
+                              <span className="text-xs text-yellow-400 bg-yellow-900 px-1 py-0.5 rounded-full animate-pulse">
+                                Queued
+                              </span>
+                            )}
                           </div>
                           <div className="bg-gray-800 rounded-lg p-2 border border-purple-400 shadow-inner">
                             <div className="text-xs text-white leading-relaxed font-medium">
