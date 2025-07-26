@@ -24,10 +24,10 @@ class Crewmate:
         # Format public chat history (what everyone can see)
         public_chat = []
         for action in public_action_history[-15:]:
-            agent_color = agent_colors.get(action.agent_id, f"Agent{action.agent_id}")
+            agent_color = agent_colors.get(action.agent_id, f"unknown{action.agent_id}")
             action_text = f"{agent_color} {action.action_type.value}: {action.content}"
             if action.target_agent_id is not None:
-                target_color = agent_colors.get(action.target_agent_id, f"Agent{action.target_agent_id}")
+                target_color = agent_colors.get(action.target_agent_id, f"unknown{action.target_agent_id}")
                 action_text += f" (targeting {target_color})"
             public_chat.append(action_text)
         
@@ -76,8 +76,8 @@ INVESTIGATION TASKS:
 """ + """{
   "think": "your detective analysis - alibis, timelines, opportunity, evidence (always required)",
   "speak": "what you tell the group - share your alibi, question others, or present theories (optional, null if silent)",
-  "impostor_hypothesis": "agent_ID of who you currently suspect as the impostor (required)",
-  "vote": agent_ID_number (optional, null if you don't vote this turn)
+  "impostor_hypothesis": "agent_ID of who you currently suspect as the impostor (use: 0=red, 1=blue, 2=green, 3=yellow)",
+  "vote": agent_ID_number (optional, null if you don't vote this turn - use: 0=red, 1=blue, 2=green, 3=yellow)
 }
 
 Examples:
@@ -187,8 +187,15 @@ CRITICAL REQUIREMENTS:
             numbers = re.findall(r'\\d+', response)
             if numbers:
                 vote_target = int(numbers[0])
-                # Extract a short statement for speaking
-                speak_content = f"I vote for Agent{numbers[0]}"
+                # Extract a short statement for speaking  
+                # Try to find color for the agent ID
+                voted_id = int(numbers[0])
+                voted_color = "unknown"
+                if hasattr(self, 'data') and hasattr(self.data, 'id'):
+                    # We don't have access to all_agents here, so use a simple mapping
+                    color_map = {0: "red", 1: "blue", 2: "green", 3: "yellow"}
+                    voted_color = color_map.get(voted_id, f"agent{voted_id}")
+                speak_content = f"I vote for {voted_color}"
         elif "say" in response_lower or "speak" in response_lower or "tell" in response_lower:
             # Extract a short speaking statement
             speak_content = response.strip()[:80] + "..." if len(response.strip()) > 80 else response.strip()
