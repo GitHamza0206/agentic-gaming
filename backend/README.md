@@ -18,7 +18,11 @@ FastAPI-based backend for an AI-powered impostor game similar to Among Us, where
 
 3. **Run the server:**
    ```bash
-   python src/main.py
+   # Option 1: Set PYTHONPATH
+   PYTHONPATH=. python src/main.py
+   
+   # Option 2: Use python -m
+   python -m src.main
    ```
    Server runs on `http://localhost:8000`
 
