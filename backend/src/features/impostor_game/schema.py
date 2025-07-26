@@ -52,6 +52,7 @@ class AgentTurn(BaseModel):
     think: str  # Always required - agent's private thoughts
     speak: Optional[str] = None  # Optional - public statement
     vote: Optional[int] = None  # Optional - vote target agent_id
+    impostor_hypothesis: Optional[int] = None  # Agent's current suspicion of who the impostor is
     memory_update: Optional['AgentMemory'] = None  # Memory from this step
 
 class GameState(BaseModel):

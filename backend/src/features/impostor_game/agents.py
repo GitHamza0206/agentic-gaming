@@ -10,7 +10,7 @@ class Crewmate:
         self.llm_client = llm_client
     
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. You are currently in an EMERGENCY MEETING discussing who the impostor is. Someone found a dead body, so now everyone is gathered at the meeting table to debate and vote. Your goal is to find the impostor before they eliminate everyone. Share what you saw, analyze others' stories for inconsistencies, and vote to eliminate the impostor."
+        return f"You are {self.data.name} ({self.data.color}), a CREWMATE detective. A dead body has been found and you're now investigating the murder to identify the impostor. Your goal is to analyze alibis, establish timelines, and deduce who had the opportunity to commit the murder. Each discussion turn, you must form and share your hypothesis about who the impostor is, gather evidence to support or refute theories, and work toward eliminating the killer."
     
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
@@ -63,26 +63,32 @@ class Crewmate:
             {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context} \\n{meeting_info}"},
             {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": f"""You are currently in an EMERGENCY MEETING at the meeting table discussing who the impostor is. Respond in JSON format for this discussion turn.
+            {"role": "user", "content": f"""MURDER INVESTIGATION: A dead body has been found and you're investigating to identify the impostor. This is your detective analysis turn.
 
-WHAT YOU WERE DOING BEFORE THE MEETING: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
+YOUR ALIBI: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
+
+INVESTIGATION TASKS:
+1. Establish where everyone was during the murder timeframe
+2. Identify who had opportunity to commit the murder
+3. Form your current hypothesis about who the impostor is
+4. Gather evidence to support or challenge theories
 
 """ + """{
-  "think": "your private analysis of the situation and other players (always required)",
-  "speak": "what you say to the group about what you observed or your suspicions (optional, null if silent)",
-  "vote": agent_ID_number (optional, null if you don't vote),
+  "think": "your detective analysis - alibis, timelines, opportunity, evidence (always required)",
+  "speak": "what you tell the group - share your alibi, question others, or present theories (optional, null if silent)",
+  "impostor_hypothesis": "agent_ID of who you currently suspect as the impostor (required)",
+  "vote": agent_ID_number (optional, null if you don't vote this turn)
 }
 
 Examples:
-{"think": "Red's story doesn't match what I saw - they claim they were alone but I saw them with Blue", "speak": "I was doing navigation tasks and saw Red and Blue together in Electrical", "vote": null}
-{"think": "Yellow's timeline is suspicious, they're probably the impostor", "speak": "Yellow, you said you were in Cafeteria but the body was found in Electrical", "vote": 3}
+{"think": "Yellow was alone near Electrical where the body was found. Red and Blue have solid alibis since they were together. Yellow is most suspicious.", "speak": "I was in Navigation with Blue. Yellow, where exactly were you when the murder happened?", "impostor_hypothesis": 3, "vote": null}
+{"think": "Red's story keeps changing about their location. First they said Cafeteria, now Electrical. Very suspicious behavior.", "speak": "Red, you first said you were in Cafeteria but now claim Electrical - which is it?", "impostor_hypothesis": 0, "vote": 0}
 
-IMPORTANT: 
-- This is a DISCUSSION about what happened BEFORE the meeting
-- Share what you observed and analyze others' stories for contradictions
-- "think" = your private analysis (always required)
-- "speak" = what you tell the group (optional)
-- "vote" = agent ID to eliminate (optional)
+CRITICAL REQUIREMENTS:
+- You MUST always have an "impostor_hypothesis" - your current best guess
+- Focus on WHO HAD OPPORTUNITY to commit the murder
+- Question inconsistencies in alibis and timelines
+- Use logical deduction based on evidence
 - Respond with valid JSON only!"""}
         ]
         
@@ -123,6 +129,7 @@ IMPORTANT:
                 think = data.get("think", "")
                 speak = data.get("speak")
                 vote = data.get("vote")
+                impostor_hypothesis = data.get("impostor_hypothesis")
                 
                 # Ensure think is not empty
                 if not think:
@@ -141,6 +148,15 @@ IMPORTANT:
                     except (ValueError, TypeError):
                         vote = None
                 
+                # Convert impostor_hypothesis null to None and validate
+                if impostor_hypothesis == "null" or impostor_hypothesis == "":
+                    impostor_hypothesis = None
+                elif impostor_hypothesis is not None:
+                    try:
+                        impostor_hypothesis = int(impostor_hypothesis)
+                    except (ValueError, TypeError):
+                        impostor_hypothesis = None
+                
                 # Create simple memory update based on current data
                 memory_update = AgentMemory(
                     step_number=step_number,
@@ -154,6 +170,7 @@ IMPORTANT:
                     think=think,
                     speak=speak,
                     vote=vote,
+                    impostor_hypothesis=impostor_hypothesis,
                     memory_update=memory_update
                 )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -189,12 +206,13 @@ IMPORTANT:
             think=think_content,
             speak=speak_content,
             vote=vote_target,
+            impostor_hypothesis=None,  # No hypothesis in fallback case
             memory_update=default_memory
         )
 
 class Impostor(Crewmate):
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. You are currently in an EMERGENCY MEETING at the meeting table. Someone found a dead body and now everyone is discussing who the impostor is. Your goal is to avoid being discovered and eliminated. Act like an innocent crewmate, provide believable alibis, deflect suspicion toward others, and never reveal that you are the impostor. Be strategic and convincing."
+        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR who committed the murder. You're now being investigated by the other crewmates who are trying to identify you. Your goal is to avoid detection and elimination. Provide convincing alibis, act innocent, deflect suspicion toward innocent crewmates, and create doubt about others. When forced to give an impostor hypothesis, accuse someone else strategically. Never reveal your true identity."
     
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
