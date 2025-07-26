@@ -4,7 +4,7 @@ from cerebras.cloud.sdk import Cerebras
 
 class LLMClient:
     def __init__(self):
-        api_key = os.environ.get("CEREBRAS_API_KEY", "csk-wx8vctr5ytdnjc8wkj94tjp4d6ffxxf6p3ppc4jj68xydpe9")
+        api_key = os.environ.get("CEREBRAS_API_KEY")
         self.client = Cerebras(api_key=api_key)
     
     def generate_response(
