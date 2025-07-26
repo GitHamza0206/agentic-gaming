@@ -71,6 +71,7 @@ class StepResponse(BaseModel):
     step_number: int
     max_steps: int
     turns: List[AgentTurn]  # Each agent's turn with think/speak/vote
+    conversation_history: List[AgentAction]  # Public conversation history (SPEAK and VOTE actions)
     eliminated: Optional[str] = None
     winner: Optional[str] = None
     game_over: bool = False

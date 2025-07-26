@@ -114,7 +114,8 @@ class ImpostorGameService:
                 phase=game.phase,
                 step_number=game.step_number,
                 max_steps=game.max_steps,
-                actions=[],
+                turns=[],
+                conversation_history=game.public_action_history,
                 winner=game.winner,
                 game_over=True,
                 message="Game over"
@@ -140,7 +141,8 @@ class ImpostorGameService:
                 phase=game.phase,
                 step_number=game.step_number,
                 max_steps=game.max_steps,
-                actions=[],
+                turns=[],
+                conversation_history=game.public_action_history,
                 winner=game.winner,
                 game_over=True,
                 message=message
@@ -182,7 +184,7 @@ class ImpostorGameService:
                         target_agent_id=None
                     ))
                 
-                # Other agents act
+                # Other agents act - generate all turns first
                 for agent_data in alive_agents:
                     if agent_data.id != reporter.id:  # Skip reporter as they already acted
                         agent = self._create_agent(agent_data)
@@ -203,32 +205,35 @@ class ImpostorGameService:
                             content=turn.think,
                             target_agent_id=None
                         ))
+                
+                # After all agents have generated their turns, randomly select one speaker (excluding reporter)
+                other_agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None and turn.agent_id != reporter.id]
+                if other_agents_who_want_to_speak:
+                    chosen_speaker = random.choice(other_agents_who_want_to_speak)
+                    game.public_action_history.append(AgentAction(
+                        agent_id=chosen_speaker.agent_id,
+                        action_type=ActionType.SPEAK,
+                        content=chosen_speaker.speak,
+                        target_agent_id=None
+                    ))
+                
+                # Now process votes from all agents (including reporter if they voted)
+                for turn in step_turns:
+                    if turn.vote is not None:
+                        game.public_action_history.append(AgentAction(
+                            agent_id=turn.agent_id,
+                            action_type=ActionType.VOTE,
+                            content=f"I vote to eliminate Agent{turn.vote}",
+                            target_agent_id=turn.vote
+                        ))
                         
-                        # Process speak publicly if present
-                        if turn.speak:
-                            game.public_action_history.append(AgentAction(
-                                agent_id=agent_data.id,
-                                action_type=ActionType.SPEAK,
-                                content=turn.speak,
-                                target_agent_id=None
-                            ))
-                        
-                        # Process vote if present
-                        if turn.vote is not None:
-                            game.public_action_history.append(AgentAction(
-                                agent_id=agent_data.id,
-                                action_type=ActionType.VOTE,
-                                content=f"I vote to eliminate Agent{turn.vote}",
-                                target_agent_id=turn.vote
-                            ))
-                            
-                            # Count the vote
-                            if turn.vote in game.current_votes:
-                                game.current_votes[turn.vote] += 1
-                            else:
-                                game.current_votes[turn.vote] = 1
+                        # Count the vote
+                        if turn.vote in game.current_votes:
+                            game.current_votes[turn.vote] += 1
+                        else:
+                            game.current_votes[turn.vote] = 1
         else:
-            # Normal step - all agents act
+            # Normal step - generate all agent turns first
             context = f"EMERGENCY MEETING in progress. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}. Find the impostor!"
             
             for agent_data in alive_agents:
@@ -249,20 +254,23 @@ class ImpostorGameService:
                     content=turn.think,
                     target_agent_id=None
                 ))
-                
-                # Process speak publicly if present
-                if turn.speak:
-                    game.public_action_history.append(AgentAction(
-                        agent_id=agent_data.id,
-                        action_type=ActionType.SPEAK,
-                        content=turn.speak,
-                        target_agent_id=None
-                    ))
-                
-                # Process vote if present
+            
+            # After all agents have generated their turns, randomly select one speaker
+            agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
+            if agents_who_want_to_speak:
+                chosen_speaker = random.choice(agents_who_want_to_speak)
+                game.public_action_history.append(AgentAction(
+                    agent_id=chosen_speaker.agent_id,
+                    action_type=ActionType.SPEAK,
+                    content=chosen_speaker.speak,
+                    target_agent_id=None
+                ))
+            
+            # Now process all votes
+            for turn in step_turns:
                 if turn.vote is not None:
                     game.public_action_history.append(AgentAction(
-                        agent_id=agent_data.id,
+                        agent_id=turn.agent_id,
                         action_type=ActionType.VOTE,
                         content=f"I vote to eliminate Agent{turn.vote}",
                         target_agent_id=turn.vote
@@ -324,6 +332,7 @@ class ImpostorGameService:
             step_number=game.step_number - 1,  # Show the step that just completed
             max_steps=game.max_steps,
             turns=step_turns,
+            conversation_history=game.public_action_history,
             eliminated=eliminated_agent.name if eliminated_agent else None,
             winner=winner,
             game_over=game_over,
