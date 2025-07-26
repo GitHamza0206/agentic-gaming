@@ -1,0 +1,23 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(pnpm:*)",
+            "Bash(npm run lint)",
+            "Bash(npm run test:*)",
+            "Read(~/.zshrc)",
+            "Edit",
+            "Bash(ls:*)",
+            "Bash(cat:*)",
+            "Bash(git:*)",
+            "Bash(gh:*)",
+            "Bash(docker:*)",
+            "Bash(docker-compose:*)",
+            "mcp__context7"
+        ],
+        "defaultMode": "acceptEdits"
+    },
+    "enableAllProjectMcpServers": true,
+    "enabledMcpjsonServers": [
+        "context7"
+    ]
+}
