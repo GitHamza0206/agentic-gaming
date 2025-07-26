@@ -2,7 +2,7 @@ import re
 import json
 from typing import List, Optional
 from src.core.llm_client import LLMClient
-from .schema import Agent, AgentAction, ActionType, AgentTurn
+from .schema import Agent, AgentAction, ActionType, AgentTurn, AgentMemory
 
 class Crewmate:
     def __init__(self, agent_data: Agent, llm_client: LLMClient):
@@ -29,38 +29,75 @@ class Crewmate:
         for thought in private_thoughts[-10:]:
             private_chat.append(f"You thought: {thought.content}")
         
+        # Format memory history for better context
+        memory_context = self._format_memory_context()
+        
         public_context = "\\n".join(public_chat) if public_chat else "No public discussion yet."
         private_context = "\\n".join(private_chat) if private_chat else "No private thoughts yet."
         
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": f"Game context: {context}"},
+            {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context}"},
             {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": """RESPOND ONLY WITH VALID JSON! No XML tags, no explanations, just JSON:
+            {"role": "user", "content": f"""You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote.
 
-{
+Also update your memory with observations, suspicions, and strategy for step {step_number}:
+
+{{
   "think": "your private thoughts and analysis (always required, detailed)",
   "speak": "short public statement to other crewmates (optional, null if you don't speak)",
-  "vote": agent_ID_number (optional, null if you don't vote)
-}
+  "vote": agent_ID_number (optional, null if you don't vote),
+  "memory_update": {{
+    "step_number": {step_number},
+    "observations": ["what you noticed this step"],
+    "suspicions": {{"agent_id": "reason for suspicion"}},
+    "alliances": [agent_IDs_you_trust],
+    "strategy_notes": "your current strategy/plan",
+    "emotion_state": "confident|suspicious|panicked|neutral"
+  }}
+}}
 
-Examples of CORRECT JSON format:
-{"think": "Red seems suspicious based on their defensive behavior and contradictory statements about their location. I should observe more before making accusations.", "speak": null, "vote": null}
-{"think": "Blue's story about being in electrical doesn't match what Green said earlier, they might be lying or confused.", "speak": "Blue, where exactly were you when the body was found?", "vote": null}
-{"think": "I've analyzed all the evidence and I'm convinced Green is the impostor based on their voting pattern and deflection tactics.", "speak": "I vote Green - they've been too defensive", "vote": 2}
+Examples:
+{"think": "Red seems suspicious based on their defensive behavior and contradictory statements about their location", "speak": null, "vote": null}
+{"think": "Blue's story about being in electrical doesn't match what Green said earlier, they might be lying", "speak": "Blue, you said you were in electrical but Green saw someone else there", "vote": null}
+{"think": "I've analyzed all the evidence and I'm convinced Green is the impostor based on their voting pattern", "speak": "Green has been deflecting suspicion all game, I think they're the impostor", "vote": 2}
 
-CRITICAL: 
-- NO XML TAGS like <think> or <speak>
-- ONLY JSON format like {"think": "...", "speak": null, "vote": null}
-- Start your response with { and end with }
-- Use null for empty values, not empty strings"""}
+IMPORTANT: 
+- "think" = your private thoughts and detailed analysis (always required, only you can see this)
+- "speak" = what you say out loud to everyone (optional, short public statement, set to null if you stay silent)
+- "vote" = agent ID to eliminate (optional, only when you're confident, set to null otherwise)
+- Keep "speak" SHORT and direct, different from your private thoughts
+- Respond with valid JSON only!"""}
         ]
         
-        response = self.llm_client.generate_response(messages, max_tokens=200, temperature=0.7)
-        return self._parse_turn(response)
+        response = self.llm_client.generate_response(messages, max_tokens=300, temperature=0.7)
+        return self._parse_turn(response, step_number)
     
-    def _parse_turn(self, response: str) -> AgentTurn:
+    def _format_memory_context(self) -> str:
+        """Format agent's memory history for context"""
+        if not self.data.memory_history:
+            return "No previous memories."
+        
+        memory_lines = []
+        for memory in self.data.memory_history[-3:]:  # Last 3 steps
+            lines = [f"Step {memory.step_number}:"]
+            if memory.observations:
+                lines.append(f"  Observed: {', '.join(memory.observations)}")
+            if memory.suspicions:
+                suspicion_text = ", ".join([f"Agent{aid}: {reason}" for aid, reason in memory.suspicions.items()])
+                lines.append(f"  Suspicions: {suspicion_text}")
+            if memory.alliances:
+                lines.append(f"  Trust: Agent{', Agent'.join(map(str, memory.alliances))}")
+            if memory.strategy_notes:
+                lines.append(f"  Strategy: {memory.strategy_notes}")
+            lines.append(f"  Emotion: {memory.emotion_state}")
+            memory_lines.extend(lines)
+        
+        return "\\n".join(memory_lines)
+    
+    def _parse_turn(self, response: str, step_number: int) -> AgentTurn:
         # Debug: print what LLM actually responds
         print(f"DEBUG - {self.data.name} LLM response: {response}")
         
@@ -85,13 +122,9 @@ CRITICAL:
                 if not think:
                     think = "I'm processing the situation..."
                 
-                # Convert speak null to None and validate it's not thinking content
+                # Convert speak null to None
                 if speak == "null" or speak == "":
                     speak = None
-                elif speak and len(speak) > 100:  # Too long for speaking
-                    speak = None
-                elif speak and any(word in speak.lower() for word in ['analysis', 'analyzing', 'i think that', 'seems like', 'based on', 'considering']):
-                    speak = None  # This looks like thinking, not speaking
                     
                 # Convert vote null to None and validate
                 if vote == "null" or vote == "":
@@ -102,53 +135,62 @@ CRITICAL:
                     except (ValueError, TypeError):
                         vote = None
                 
+                # Parse memory update if provided
+                memory_update = None
+                if "memory_update" in data and data["memory_update"]:
+                    memory_data = data["memory_update"]
+                    memory_update = AgentMemory(
+                        step_number=memory_data.get("step_number", step_number),
+                        observations=memory_data.get("observations", []),
+                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int))},
+                        alliances=memory_data.get("alliances", []),
+                        strategy_notes=memory_data.get("strategy_notes", ""),
+                        emotion_state=memory_data.get("emotion_state", "neutral")
+                    )
+                    # Add to agent's memory history
+                    self.data.memory_history.append(memory_update)
+
                 return AgentTurn(
                     agent_id=self.data.id,
                     think=think,
                     speak=speak,
-                    vote=vote
+                    vote=vote,
+                    memory_update=memory_update
                 )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"DEBUG - JSON parsing error for {self.data.name}: {e}")
         
-        # Fallback: try to extract content from XML or malformed response
+        # Fallback: try to extract meaningful content
         response_lower = response.lower()
-        think_content = "I need to analyze this situation more carefully..."
+        think_content = f"I'm analyzing the situation... {response.strip()[:100]}"  # Use part of response as thinking
         speak_content = None
         vote_target = None
         
-        # Try to extract from XML tags if present
-        if "<think>" in response_lower:
-            think_match = re.search(r'<think>(.*?)</think>', response, re.DOTALL | re.IGNORECASE)
-            if think_match:
-                think_content = think_match.group(1).strip()
+        # Look for voting patterns
+        if "vote" in response_lower or "accuse" in response_lower:
+            numbers = re.findall(r'\\d+', response)
+            if numbers:
+                vote_target = int(numbers[0])
+                # Extract a short statement for speaking
+                speak_content = f"I vote for Agent{numbers[0]}"
+        elif "say" in response_lower or "speak" in response_lower or "tell" in response_lower:
+            # Extract a short speaking statement
+            speak_content = response.strip()[:80] + "..." if len(response.strip()) > 80 else response.strip()
         
-        if "<speak>" in response_lower:
-            speak_match = re.search(r'<speak>(.*?)</speak>', response, re.DOTALL | re.IGNORECASE)
-            if speak_match:
-                speak_content = speak_match.group(1).strip()
-                if speak_content.lower() in ["null", "none", ""]:
-                    speak_content = None
-        
-        if "<vote>" in response_lower:
-            vote_match = re.search(r'<vote>(.*?)</vote>', response, re.DOTALL | re.IGNORECASE)
-            if vote_match:
-                vote_text = vote_match.group(1).strip()
-                if vote_text.lower() not in ["null", "none", ""]:
-                    try:
-                        vote_target = int(vote_text)
-                    except ValueError:
-                        vote_target = None
-        
-        # If no XML found, try to extract from plain text
-        if think_content == "I need to analyze this situation more carefully..." and len(response.strip()) > 10:
-            think_content = response.strip()[:150]  # Use first part as thinking
+        # Create fallback memory
+        default_memory = AgentMemory(
+            step_number=step_number,
+            observations=[f"Failed to parse response properly"],
+            emotion_state="confused"
+        )
+        self.data.memory_history.append(default_memory)
         
         return AgentTurn(
             agent_id=self.data.id,
             think=think_content,
             speak=speak_content,
-            vote=vote_target
+            vote=vote_target,
+            memory_update=default_memory
         )
 
 class Impostor(Crewmate):
