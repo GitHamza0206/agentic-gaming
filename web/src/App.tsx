@@ -396,8 +396,9 @@ const AmongUsSimulation = () => {
                 </div>
               ))}
             </div>
-          )}
+          </div>
         </div>
+        )}
       </div>
     </div>
   );
