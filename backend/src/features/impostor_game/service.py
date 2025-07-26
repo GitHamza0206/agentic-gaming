@@ -241,14 +241,11 @@ class ImpostorGameService:
         # Now process all votes
         for turn in step_turns:
             if turn.vote is not None:
-                # Find the color of the voted agent
-                voted_agent = next((a for a in game.agents if a.id == turn.vote), None)
-                voted_color = voted_agent.color if voted_agent else f"unknown{turn.vote}"
-                
+                # turn.vote is now the color directly
                 game.public_action_history.append(AgentAction(
                     agent_id=turn.agent_id,
                     action_type=ActionType.VOTE,
-                    content=f"I vote to eliminate {voted_color}",
+                    content=f"I vote to eliminate {turn.vote}",
                     target_agent_id=turn.vote
                 ))
                 

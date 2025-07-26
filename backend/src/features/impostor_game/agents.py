@@ -15,20 +15,14 @@ class Crewmate:
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
         
-        # Create agent ID to color mapping
-        agent_colors = {}
-        if all_agents:
-            for agent in all_agents:
-                agent_colors[agent.id] = agent.color
-        
         # Format public chat history (what everyone can see)
         public_chat = []
         for action in public_action_history[-15:]:
-            agent_color = agent_colors.get(action.agent_id, f"unknown{action.agent_id}")
+            # agent_id is now the color directly
+            agent_color = action.agent_id
             action_text = f"{agent_color} {action.action_type.value}: {action.content}"
             if action.target_agent_id is not None:
-                target_color = agent_colors.get(action.target_agent_id, f"unknown{action.target_agent_id}")
-                action_text += f" (targeting {target_color})"
+                action_text += f" (targeting {action.target_agent_id})"
             public_chat.append(action_text)
         
         # Format private thoughts (only this agent's thoughts)
@@ -76,13 +70,13 @@ INVESTIGATION TASKS:
 """ + """{
   "think": "your detective analysis - alibis, timelines, opportunity, evidence (always required)",
   "speak": "what you tell the group - share your alibi, question others, or present theories (optional, null if silent)",
-  "impostor_hypothesis": "agent_ID of who you currently suspect as the impostor (use: 0=red, 1=blue, 2=green, 3=yellow)",
-  "vote": agent_ID_number (optional, null if you don't vote this turn - use: 0=red, 1=blue, 2=green, 3=yellow)
+  "impostor_hypothesis": "color of agent you currently suspect as the impostor (red, blue, green, or yellow)",
+  "vote": "color of agent to eliminate (red, blue, green, yellow) or null if you don't vote this turn"
 }
 
 Examples:
-{"think": "Yellow was alone near Electrical where the body was found. Red and Blue have solid alibis since they were together. Yellow is most suspicious.", "speak": "I was in Navigation with Blue. Yellow, where exactly were you when the murder happened?", "impostor_hypothesis": 3, "vote": null}
-{"think": "Red's story keeps changing about their location. First they said Cafeteria, now Electrical. Very suspicious behavior.", "speak": "Red, you first said you were in Cafeteria but now claim Electrical - which is it?", "impostor_hypothesis": 0, "vote": 0}
+{"think": "Yellow was alone near Electrical where the body was found. Red and Blue have solid alibis since they were together. Yellow is most suspicious.", "speak": "I was in Navigation with Blue. Yellow, where exactly were you when the murder happened?", "impostor_hypothesis": "yellow", "vote": null}
+{"think": "Red's story keeps changing about their location. First they said Cafeteria, now Electrical. Very suspicious behavior.", "speak": "Red, you first said you were in Cafeteria but now claim Electrical - which is it?", "impostor_hypothesis": "red", "vote": "red"}
 
 CRITICAL REQUIREMENTS:
 - You MUST always have an "impostor_hypothesis" - your current best guess
@@ -139,22 +133,26 @@ CRITICAL REQUIREMENTS:
                 if speak == "null" or speak == "":
                     speak = None
                     
-                # Convert vote null to None and validate
+                # Convert vote null to None and validate color
                 if vote == "null" or vote == "":
                     vote = None
                 elif vote is not None:
-                    try:
-                        vote = int(vote)
-                    except (ValueError, TypeError):
+                    # Validate it's a valid color
+                    valid_colors = ["red", "blue", "green", "yellow"]
+                    if isinstance(vote, str) and vote.lower() in valid_colors:
+                        vote = vote.lower()
+                    else:
                         vote = None
                 
-                # Convert impostor_hypothesis null to None and validate
+                # Convert impostor_hypothesis null to None and validate color
                 if impostor_hypothesis == "null" or impostor_hypothesis == "":
                     impostor_hypothesis = None
                 elif impostor_hypothesis is not None:
-                    try:
-                        impostor_hypothesis = int(impostor_hypothesis)
-                    except (ValueError, TypeError):
+                    # Validate it's a valid color
+                    valid_colors = ["red", "blue", "green", "yellow"]
+                    if isinstance(impostor_hypothesis, str) and impostor_hypothesis.lower() in valid_colors:
+                        impostor_hypothesis = impostor_hypothesis.lower()
+                    else:
                         impostor_hypothesis = None
                 
                 # Create simple memory update based on current data
@@ -184,18 +182,20 @@ CRITICAL REQUIREMENTS:
         
         # Look for voting patterns
         if "vote" in response_lower or "accuse" in response_lower:
-            numbers = re.findall(r'\\d+', response)
-            if numbers:
-                vote_target = int(numbers[0])
-                # Extract a short statement for speaking  
-                # Try to find color for the agent ID
-                voted_id = int(numbers[0])
-                voted_color = "unknown"
-                if hasattr(self, 'data') and hasattr(self.data, 'id'):
-                    # We don't have access to all_agents here, so use a simple mapping
-                    color_map = {0: "red", 1: "blue", 2: "green", 3: "yellow"}
-                    voted_color = color_map.get(voted_id, f"agent{voted_id}")
-                speak_content = f"I vote for {voted_color}"
+            # Look for color names in the response
+            valid_colors = ["red", "blue", "green", "yellow"]
+            found_color = None
+            for color in valid_colors:
+                if color in response_lower:
+                    found_color = color
+                    vote_target = color
+                    break
+            
+            if found_color:
+                speak_content = f"I vote for {found_color}"
+            else:
+                # Fallback: no clear color found
+                speak_content = "I'm still analyzing the evidence"
         elif "say" in response_lower or "speak" in response_lower or "tell" in response_lower:
             # Extract a short speaking statement
             speak_content = response.strip()[:80] + "..." if len(response.strip()) > 80 else response.strip()
