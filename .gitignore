@@ -371,3 +371,5 @@ docker-compose.override.yml
 # Local development files
 local/
 dev/ 
+
+.vite/*
