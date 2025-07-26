@@ -34,6 +34,12 @@ class AgentAction(BaseModel):
     content: str
     target_agent_id: Optional[int] = None
 
+class AgentTurn(BaseModel):
+    agent_id: int
+    think: str  # Always required - agent's private thoughts
+    speak: Optional[str] = None  # Optional - public statement
+    vote: Optional[int] = None  # Optional - vote target agent_id
+
 class GameState(BaseModel):
     game_id: str
     status: GameStatus
@@ -41,7 +47,8 @@ class GameState(BaseModel):
     step_number: int
     max_steps: int = 30
     agents: List[Agent]
-    action_history: List[AgentAction]
+    public_action_history: List[AgentAction]  # Only SPEAK and VOTE actions
+    private_thoughts: Dict[int, List[AgentAction]] = {}  # THINK actions per agent
     current_votes: Dict[int, int] = {}
     winner: Optional[str] = None
     impostor_id: int
@@ -63,7 +70,7 @@ class StepResponse(BaseModel):
     phase: GamePhase
     step_number: int
     max_steps: int
-    actions: List[AgentAction]
+    turns: List[AgentTurn]  # Each agent's turn with think/speak/vote
     eliminated: Optional[str] = None
     winner: Optional[str] = None
     game_over: bool = False
@@ -76,7 +83,7 @@ class GameStateResponse(BaseModel):
     step_number: int
     max_steps: int
     agents: List[Agent]
-    action_history: List[AgentAction]
+    public_action_history: List[AgentAction]  # Only public actions (SPEAK/VOTE)
     current_votes: Dict[str, int]
     winner: Optional[str] = None
     alive_count: int
