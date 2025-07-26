@@ -163,12 +163,12 @@ IMPORTANT:
                     memory_update = AgentMemory(
                         step_number=memory_data.get("step_number", step_number),
                         observations=memory_data.get("observations", []),
-                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int))},
+                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int)) and str(k).isdigit()},
                         alliances=memory_data.get("alliances", []),
                         strategy_notes=memory_data.get("strategy_notes", ""),
                         emotion_state=memory_data.get("emotion_state", "neutral")
                     )
-                    # Add to agent's memory history
+                    # Add to memory for backward compatibility with unit tests
                     self.data.memory_history.append(memory_update)
 
                 return AgentTurn(
@@ -204,6 +204,7 @@ IMPORTANT:
             observations=[f"Failed to parse response properly"],
             emotion_state="confused"
         )
+        # Add to memory for backward compatibility with unit tests
         self.data.memory_history.append(default_memory)
         
         return AgentTurn(

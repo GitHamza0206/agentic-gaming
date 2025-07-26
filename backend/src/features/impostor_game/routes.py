@@ -7,11 +7,14 @@ router = APIRouter(prefix="/impostor-game", tags=["Impostor Game"])
 game_service = ImpostorGameService()
 
 @router.post("/init", response_model=InitGameResponse)
-async def init_game():
+async def init_game(num_players: int = 4):
     """
-    Initialise un nouveau jeu de l'imposteur avec 8 agents IA.
+    Initialise un nouveau jeu de l'imposteur avec le nombre spécifié d'agents IA.
     """
-    return game_service.create_game()
+    if num_players < 3 or num_players > 8:
+        raise HTTPException(status_code=400, detail="Le nombre de joueurs doit être entre 3 et 8")
+    
+    return game_service.create_game(num_players)
 
 @router.post("/step/{game_id}", response_model=StepResponse)
 async def game_step(game_id: str):
