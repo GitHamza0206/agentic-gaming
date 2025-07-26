@@ -238,16 +238,23 @@ class ImpostorGameService:
                 target_agent_id=None
             ))
         
-        # After all agents have generated their turns, randomly select one speaker
+        # Allow multiple agents to speak per step for more realistic group discussion
         agents_who_want_to_speak = [turn for turn in step_turns if turn.speak is not None]
         if agents_who_want_to_speak:
-            chosen_speaker = random.choice(agents_who_want_to_speak)
-            game.public_action_history.append(AgentAction(
-                agent_id=chosen_speaker.agent_id,
-                action_type=ActionType.SPEAK,
-                content=chosen_speaker.speak,
-                target_agent_id=None
-            ))
+            # Randomly shuffle the order of speakers to vary who goes first
+            random.shuffle(agents_who_want_to_speak)
+            
+            # Let 1-3 agents speak per step (randomly chosen number)
+            num_speakers = min(random.randint(1, 3), len(agents_who_want_to_speak))
+            speakers_this_step = agents_who_want_to_speak[:num_speakers]
+            
+            for speaker in speakers_this_step:
+                game.public_action_history.append(AgentAction(
+                    agent_id=speaker.agent_id,
+                    action_type=ActionType.SPEAK,
+                    content=speaker.speak,
+                    target_agent_id=None
+                ))
         
         # Now process all votes
         for turn in step_turns:
