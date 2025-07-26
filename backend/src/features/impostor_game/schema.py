@@ -1,6 +1,9 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
 from enum import Enum
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from typing import ForwardRef
 
 class ActionType(str, Enum):
     THINK = "think"
@@ -27,7 +30,7 @@ class Agent(BaseModel):
     is_impostor: bool = False
     is_alive: bool = True
     votes_received: int = 0
-    memory_history: List[AgentMemory] = []  # Agent's memory across all steps
+    memory_history: List['AgentMemory'] = []  # Agent's memory across all steps
 
 class AgentAction(BaseModel):
     agent_id: int
@@ -48,7 +51,7 @@ class AgentTurn(BaseModel):
     think: str  # Always required - agent's private thoughts
     speak: Optional[str] = None  # Optional - public statement
     vote: Optional[int] = None  # Optional - vote target agent_id
-    memory_update: Optional[AgentMemory] = None  # Memory from this step
+    memory_update: Optional['AgentMemory'] = None  # Memory from this step
 
 class GameState(BaseModel):
     game_id: str
@@ -99,3 +102,7 @@ class GameStateResponse(BaseModel):
     winner: Optional[str] = None
     alive_count: int
     impostor_alive: bool
+
+# Update forward references
+Agent.model_rebuild()
+AgentTurn.model_rebuild()

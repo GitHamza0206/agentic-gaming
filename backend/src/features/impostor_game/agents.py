@@ -45,30 +45,29 @@ class Crewmate:
 
 Also update your memory with observations, suspicions, and strategy for step {step_number}:
 
-{{
+""" + """{
   "think": "your private thoughts and analysis (always required, detailed)",
   "speak": "short public statement to other crewmates (optional, null if you don't speak)",
   "vote": agent_ID_number (optional, null if you don't vote),
-  "memory_update": {{
-    "step_number": {step_number},
+  "memory_update": {
+    "step_number": """ + str(step_number) + """,
     "observations": ["what you noticed this step"],
-    "suspicions": {{"agent_id": "reason for suspicion"}},
+    "suspicions": {"agent_id": "reason for suspicion"},
     "alliances": [agent_IDs_you_trust],
     "strategy_notes": "your current strategy/plan",
     "emotion_state": "confident|suspicious|panicked|neutral"
-  }}
-}}
+  }
+}
 
 Examples:
-{"think": "Red seems suspicious based on their defensive behavior and contradictory statements about their location", "speak": null, "vote": null}
-{"think": "Blue's story about being in electrical doesn't match what Green said earlier, they might be lying", "speak": "Blue, you said you were in electrical but Green saw someone else there", "vote": null}
-{"think": "I've analyzed all the evidence and I'm convinced Green is the impostor based on their voting pattern", "speak": "Green has been deflecting suspicion all game, I think they're the impostor", "vote": 2}
+{"think": "Red seems suspicious based on their defensive behavior", "speak": null, "vote": null}
+{"think": "Blue's story doesn't match", "speak": "Blue, you said you were in electrical", "vote": null}
 
 IMPORTANT: 
-- "think" = your private thoughts and detailed analysis (always required, only you can see this)
-- "speak" = what you say out loud to everyone (optional, short public statement, set to null if you stay silent)
-- "vote" = agent ID to eliminate (optional, only when you're confident, set to null otherwise)
-- Keep "speak" SHORT and direct, different from your private thoughts
+- "think" = your private thoughts (always required)
+- "speak" = public statement (optional, null if silent)  
+- "vote" = agent ID to eliminate (optional, null otherwise)
+- Keep "speak" SHORT and direct
 - Respond with valid JSON only!"""}
         ]
         
