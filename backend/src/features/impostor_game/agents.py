@@ -37,7 +37,7 @@ class Crewmate:
             {"role": "system", "content": f"Game context: {context}"},
             {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": """You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote:
+            {"role": "user", "content": """RESPOND ONLY WITH VALID JSON! No XML tags, no explanations, just JSON:
 
 {
   "think": "your private thoughts and analysis (always required, detailed)",
@@ -45,17 +45,16 @@ class Crewmate:
   "vote": agent_ID_number (optional, null if you don't vote)
 }
 
-Examples:
-{"think": "Red seems suspicious based on their defensive behavior and contradictory statements about their location", "speak": null, "vote": null}
-{"think": "Blue's story about being in electrical doesn't match what Green said earlier, they might be lying", "speak": "Blue, you said you were in electrical but Green saw someone else there", "vote": null}
-{"think": "I've analyzed all the evidence and I'm convinced Green is the impostor based on their voting pattern", "speak": "Green has been deflecting suspicion all game, I think they're the impostor", "vote": 2}
+Examples of CORRECT JSON format:
+{"think": "Red seems suspicious based on their defensive behavior and contradictory statements about their location. I should observe more before making accusations.", "speak": null, "vote": null}
+{"think": "Blue's story about being in electrical doesn't match what Green said earlier, they might be lying or confused.", "speak": "Blue, where exactly were you when the body was found?", "vote": null}
+{"think": "I've analyzed all the evidence and I'm convinced Green is the impostor based on their voting pattern and deflection tactics.", "speak": "I vote Green - they've been too defensive", "vote": 2}
 
-IMPORTANT: 
-- "think" = your private thoughts and detailed analysis (always required, only you can see this)
-- "speak" = what you say out loud to everyone (optional, short public statement, set to null if you stay silent)
-- "vote" = agent ID to eliminate (optional, only when you're confident, set to null otherwise)
-- Keep "speak" SHORT and direct, different from your private thoughts
-- Respond with valid JSON only!"""}
+CRITICAL: 
+- NO XML TAGS like <think> or <speak>
+- ONLY JSON format like {"think": "...", "speak": null, "vote": null}
+- Start your response with { and end with }
+- Use null for empty values, not empty strings"""}
         ]
         
         response = self.llm_client.generate_response(messages, max_tokens=200, temperature=0.7)
@@ -86,9 +85,13 @@ IMPORTANT:
                 if not think:
                     think = "I'm processing the situation..."
                 
-                # Convert speak null to None
+                # Convert speak null to None and validate it's not thinking content
                 if speak == "null" or speak == "":
                     speak = None
+                elif speak and len(speak) > 100:  # Too long for speaking
+                    speak = None
+                elif speak and any(word in speak.lower() for word in ['analysis', 'analyzing', 'i think that', 'seems like', 'based on', 'considering']):
+                    speak = None  # This looks like thinking, not speaking
                     
                 # Convert vote null to None and validate
                 if vote == "null" or vote == "":
@@ -108,22 +111,38 @@ IMPORTANT:
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"DEBUG - JSON parsing error for {self.data.name}: {e}")
         
-        # Fallback: try to extract meaningful content
+        # Fallback: try to extract content from XML or malformed response
         response_lower = response.lower()
-        think_content = f"I'm analyzing the situation... {response.strip()[:100]}"  # Use part of response as thinking
+        think_content = "I need to analyze this situation more carefully..."
         speak_content = None
         vote_target = None
         
-        # Look for voting patterns
-        if "vote" in response_lower or "accuse" in response_lower:
-            numbers = re.findall(r'\\d+', response)
-            if numbers:
-                vote_target = int(numbers[0])
-                # Extract a short statement for speaking
-                speak_content = f"I vote for Agent{numbers[0]}"
-        elif "say" in response_lower or "speak" in response_lower or "tell" in response_lower:
-            # Extract a short speaking statement
-            speak_content = response.strip()[:80] + "..." if len(response.strip()) > 80 else response.strip()
+        # Try to extract from XML tags if present
+        if "<think>" in response_lower:
+            think_match = re.search(r'<think>(.*?)</think>', response, re.DOTALL | re.IGNORECASE)
+            if think_match:
+                think_content = think_match.group(1).strip()
+        
+        if "<speak>" in response_lower:
+            speak_match = re.search(r'<speak>(.*?)</speak>', response, re.DOTALL | re.IGNORECASE)
+            if speak_match:
+                speak_content = speak_match.group(1).strip()
+                if speak_content.lower() in ["null", "none", ""]:
+                    speak_content = None
+        
+        if "<vote>" in response_lower:
+            vote_match = re.search(r'<vote>(.*?)</vote>', response, re.DOTALL | re.IGNORECASE)
+            if vote_match:
+                vote_text = vote_match.group(1).strip()
+                if vote_text.lower() not in ["null", "none", ""]:
+                    try:
+                        vote_target = int(vote_text)
+                    except ValueError:
+                        vote_target = None
+        
+        # If no XML found, try to extract from plain text
+        if think_content == "I need to analyze this situation more carefully..." and len(response.strip()) > 10:
+            think_content = response.strip()[:150]  # Use first part as thinking
         
         return AgentTurn(
             agent_id=self.data.id,
