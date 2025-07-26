@@ -17,6 +17,7 @@ class Crewmate:
         
         # Format public chat history (what everyone can see)
         public_chat = []
+        print(f"DEBUG - {self.data.color} sees {len(public_action_history)} conversation messages")
         for action in public_action_history[-15:]:
             # agent_id is now the color directly
             agent_color = action.agent_id
@@ -24,6 +25,7 @@ class Crewmate:
             if action.target_agent_id is not None:
                 action_text += f" (targeting {action.target_agent_id})"
             public_chat.append(action_text)
+            print(f"DEBUG - Conversation: {action_text}")
         
         # Format private thoughts (only this agent's thoughts)
         private_chat = []
@@ -55,17 +57,18 @@ class Crewmate:
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": f"Game context: {context}"},
             {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context} \\n{meeting_info}"},
-            {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
+            {"role": "system", "content": f"RECENT CONVERSATION (READ CAREFULLY - others may have asked you questions!):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
             {"role": "user", "content": f"""MURDER INVESTIGATION: A dead body has been found and you're investigating to identify the impostor. This is your detective analysis turn.
 
 YOU ARE: {self.data.color} ({self.data.name})
 YOUR ALIBI: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
 
-CONVERSATION ANALYSIS:
-- Look at the recent conversation - were you directly questioned or accused?
-- If someone asked YOU a question or made an accusation against YOU, respond to it first
-- If no direct questions for you, then contribute new information or ask questions
+CONVERSATION ANALYSIS (CRITICAL - READ THE RECENT CONVERSATION ABOVE):
+- Scan the RECENT CONVERSATION for your color name ({self.data.color}) - were you directly questioned?
+- Did someone say "{self.data.color}, [question]" or accuse you of something?
+- If YES: Your response MUST address that question/accusation first
+- If NO direct questions: Then share your alibi or ask new questions
 
 INVESTIGATION PRIORITIES:
 1. FIRST: Answer any direct questions asked to you by name/color
