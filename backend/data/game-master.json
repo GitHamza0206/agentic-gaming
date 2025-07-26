@@ -1,0 +1,785 @@
+[
+  {
+    "step": 0,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "starts doing wiring task",
+        "met": ["blue", "green", "yellow"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "starts doing fuel task",
+        "met": ["red", "green", "yellow"]
+      },
+      "green": {
+        "location": "Cafeteria",
+        "action": "starts doing garbage disposal task",
+        "met": ["red", "blue", "yellow"]
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "pretends to do card swipe task",
+        "met": ["red", "blue", "green"]
+      }
+    }
+  },
+  {
+    "step": 1,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "continues wiring task",
+        "met": ["blue", "green", "yellow"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "continues fuel task",
+        "met": ["red", "green", "yellow"]
+      },
+      "green": {
+        "location": "Cafeteria",
+        "action": "continues garbage disposal task",
+        "met": ["red", "blue", "yellow"]
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "fake struggling with card swipe",
+        "met": ["red", "blue", "green"]
+      }
+    }
+  },
+  {
+    "step": 2,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "finishes wiring task",
+        "met": ["blue", "green", "yellow"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "finishes fuel task",
+        "met": ["red", "green", "yellow"]
+      },
+      "green": {
+        "location": "Cafeteria",
+        "action": "finishes garbage disposal task",
+        "met": ["red", "blue", "yellow"]
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "fake finishes card swipe",
+        "met": ["red", "blue", "green"]
+      }
+    }
+  },
+  {
+    "step": 3,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "starts moving toward Electrical",
+        "met": []
+      },
+      "blue": {
+        "location": "Hallway",
+        "action": "starts moving toward Navigation",
+        "met": []
+      },
+      "green": {
+        "location": "Cafeteria",
+        "action": "remains in Cafeteria, starts second task",
+        "met": ["yellow"]
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "remains in Cafeteria with green",
+        "met": ["green"]
+      }
+    }
+  },
+  {
+    "step": 4,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "walking toward Electrical",
+        "met": []
+      },
+      "blue": {
+        "location": "Hallway",
+        "action": "walking toward Navigation",
+        "met": []
+      },
+      "green": {
+        "location": "Cafeteria",
+        "action": "working on download task",
+        "met": ["yellow"]
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "pretends to do another cafeteria task",
+        "met": ["green"]
+      }
+    }
+  },
+  {
+    "step": 5,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "enters Electrical room",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "enters Navigation room",
+        "met": []
+      },
+      "green": {
+        "location": "Cafeteria",
+        "action": "finishes download task",
+        "met": ["yellow"]
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "finishes fake cafeteria task",
+        "met": ["green"]
+      }
+    }
+  },
+  {
+    "step": 6,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "starts electrical wiring task",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "starts navigation calibration",
+        "met": []
+      },
+      "green": {
+        "location": "Hallway",
+        "action": "starts moving toward Navigation",
+        "met": []
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "starts moving toward Electrical",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 7,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "working on electrical wiring",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "working on navigation calibration",
+        "met": []
+      },
+      "green": {
+        "location": "Hallway",
+        "action": "walking toward Navigation",
+        "met": ["yellow"]
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "walking toward Electrical",
+        "met": ["green"]
+      }
+    }
+  },
+  {
+    "step": 8,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "continues electrical wiring",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "continues navigation calibration",
+        "met": []
+      },
+      "green": {
+        "location": "Hallway",
+        "action": "reaches Navigation room entrance",
+        "met": []
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "reaches Electrical room entrance",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 9,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "nearly finished electrical wiring",
+        "met": ["yellow"]
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "finishes navigation calibration",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "enters Navigation room",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "enters Electrical room",
+        "met": ["red"]
+      }
+    }
+  },
+  {
+    "step": 10,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "finishes electrical wiring task",
+        "met": ["yellow"]
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "starts second navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "starts navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "pretends to start electrical task",
+        "met": ["red"]
+      }
+    }
+  },
+  {
+    "step": 11,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "starts second electrical task",
+        "met": ["yellow"]
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "working on navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "working on navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "fake working on electrical task",
+        "met": ["red"]
+      }
+    }
+  },
+  {
+    "step": 12,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "working on electrical task",
+        "met": ["yellow"]
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "finishes navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "continues navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "continues fake electrical work",
+        "met": ["red"]
+      }
+    }
+  },
+  {
+    "step": 13,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "finishes electrical task, starts leaving",
+        "met": ["yellow"]
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "starts third navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "finishes navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "notices red leaving",
+        "met": ["red"]
+      }
+    }
+  },
+  {
+    "step": 14,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "exits Electrical room",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "working on navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "starts second navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "alone in Electrical, stops pretending",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 15,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "walking toward Cafeteria",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "continues navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "working on navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "leaves Electrical, moves toward Navigation",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 16,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "reaches Cafeteria",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "finishes navigation task",
+        "met": ["green"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "continues navigation task",
+        "met": ["blue"]
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "walking toward Navigation",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 17,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "starts cafeteria task",
+        "met": []
+      },
+      "blue": {
+        "location": "Hallway",
+        "action": "starts moving toward Cafeteria",
+        "met": ["yellow"]
+      },
+      "green": {
+        "location": "Navigation",
+        "action": "finishes navigation task, starts leaving",
+        "met": []
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "walking toward Navigation, crosses paths with blue",
+        "met": ["blue"]
+      }
+    }
+  },
+  {
+    "step": 18,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "working on cafeteria task",
+        "met": []
+      },
+      "blue": {
+        "location": "Hallway",
+        "action": "continues toward Cafeteria",
+        "met": []
+      },
+      "green": {
+        "location": "Hallway",
+        "action": "exits Navigation room, walking",
+        "met": []
+      },
+      "yellow": {
+        "location": "Navigation",
+        "action": "reaches Navigation room",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 19,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "continues cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "enters Cafeteria",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Hallway",
+        "action": "walking toward Electrical",
+        "met": []
+      },
+      "yellow": {
+        "location": "Navigation",
+        "action": "enters Navigation room, pretends to do task",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 20,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "working on cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "starts cafeteria task",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Hallway",
+        "action": "continues toward Electrical",
+        "met": []
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "quickly leaves Navigation, follows green toward Electrical",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 21,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "continues cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "working on cafeteria task",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "enters Electrical room",
+        "met": []
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "reaches Electrical room entrance",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 22,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "finishes cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "continues cafeteria task",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "starts electrical task",
+        "met": ["yellow"]
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "enters Electrical room",
+        "met": ["green"]
+      }
+    }
+  },
+  {
+    "step": 23,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "starts second cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "finishes cafeteria task",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "working on electrical task",
+        "met": ["yellow"],
+        "status": "alive"
+      },
+      "yellow": {
+        "location": "Electrical",
+        "action": "kills green",
+        "met": ["green"]
+      }
+    }
+  },
+  {
+    "step": 24,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "working on cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "starts second cafeteria task",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "quickly leaves Electrical",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 25,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "continues cafeteria task",
+        "met": ["blue"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "working on cafeteria task",
+        "met": ["red"]
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "walking quickly toward Cafeteria",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 26,
+    "agents": {
+      "red": {
+        "location": "Cafeteria",
+        "action": "finishes cafeteria task",
+        "met": ["blue", "yellow"]
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "continues cafeteria task",
+        "met": ["red", "yellow"]
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "enters Cafeteria, pretends to have been doing tasks",
+        "met": ["red", "blue"]
+      }
+    }
+  },
+  {
+    "step": 27,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "starts moving toward Electrical",
+        "met": []
+      },
+      "blue": {
+        "location": "Hallway",
+        "action": "finishes cafeteria task, starts moving toward Navigation",
+        "met": []
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "remains in Cafeteria, does fake task to establish alibi",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 28,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "walking toward Electrical",
+        "met": []
+      },
+      "blue": {
+        "location": "Hallway",
+        "action": "walking toward Navigation",
+        "met": []
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "finishes fake cafeteria task, starts moving toward Navigation",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 29,
+    "agents": {
+      "red": {
+        "location": "Hallway",
+        "action": "reaches Electrical room entrance",
+        "met": []
+      },
+      "blue": {
+        "location": "Navigation",
+        "action": "enters Navigation room",
+        "met": []
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Hallway",
+        "action": "walking toward Navigation",
+        "met": []
+      }
+    }
+  },
+  {
+    "step": 30,
+    "agents": {
+      "red": {
+        "location": "Electrical",
+        "action": "enters Electrical, discovers green's dead body, calls emergency meeting",
+        "met": []
+      },
+      "blue": {
+        "location": "Cafeteria",
+        "action": "hears emergency meeting call, walks to meeting table",
+        "met": []
+      },
+      "green": {
+        "location": "Electrical",
+        "action": "DEAD",
+        "met": [],
+        "status": "dead"
+      },
+      "yellow": {
+        "location": "Cafeteria",
+        "action": "hears emergency meeting call, walks to meeting table",
+        "met": []
+      }
+    }
+  }
+]
