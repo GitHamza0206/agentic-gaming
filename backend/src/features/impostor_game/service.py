@@ -19,14 +19,22 @@ class ImpostorGameService:
     def _load_game_master_data(self) -> List[Dict]:
         """Load game master data from JSON file"""
         try:
-            # Get the path relative to the backend directory
-            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            # Get the path to the backend directory more reliably
+            current_file = os.path.abspath(__file__)
+            # Go up from: backend/src/features/impostor_game/service.py to backend/
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file))))
             game_master_path = os.path.join(backend_dir, "data", "game-master.json")
+            
+            print(f"Attempting to load game-master.json from: {game_master_path}")
+            print(f"File exists: {os.path.exists(game_master_path)}")
             
             with open(game_master_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Warning: Could not load game-master.json: {e}")
+            print(f"Error loading game-master.json: {e}")
+            print(f"Current file: {current_file}")
+            print(f"Backend dir: {backend_dir}")
+            print(f"Game master path: {game_master_path}")
             return []
     
     def _create_agent(self, agent_data: Agent):

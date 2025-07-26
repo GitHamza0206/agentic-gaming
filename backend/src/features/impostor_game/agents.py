@@ -65,20 +65,12 @@ class Crewmate:
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
             {"role": "user", "content": f"""You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote.
 
-Also update your memory with observations, suspicions, and strategy for step {step_number}:
+Current situation - Location: {self.data.location}, Action: {self.data.action}, Met: {', '.join(self.data.met) if self.data.met else 'no one'}
 
 """ + """{
   "think": "your private thoughts and analysis (always required, detailed)",
   "speak": "short public statement to other crewmates (optional, null if you don't speak)",
   "vote": agent_ID_number (optional, null if you don't vote),
-  "memory_update": {
-    "step_number": """ + str(step_number) + """,
-    "observations": ["what you noticed this step"],
-    "suspicions": {"agent_id": "reason for suspicion"},
-    "alliances": [agent_IDs_you_trust],
-    "strategy_notes": "your current strategy/plan",
-    "emotion_state": "confident|suspicious|panicked|neutral"
-  }
 }
 
 Examples:
@@ -102,18 +94,10 @@ IMPORTANT:
             return "No previous memories."
         
         memory_lines = []
-        for memory in self.data.memory_history[-3:]:  # Last 3 steps
-            lines = [f"Step {memory.step_number}:"]
-            if memory.observations:
-                lines.append(f"  Observed: {', '.join(memory.observations)}")
-            if memory.suspicions:
-                suspicion_text = ", ".join([f"Agent{aid}: {reason}" for aid, reason in memory.suspicions.items()])
-                lines.append(f"  Suspicions: {suspicion_text}")
-            if memory.alliances:
-                lines.append(f"  Trust: Agent{', Agent'.join(map(str, memory.alliances))}")
-            if memory.strategy_notes:
-                lines.append(f"  Strategy: {memory.strategy_notes}")
-            lines.append(f"  Emotion: {memory.emotion_state}")
+        for memory in self.data.memory_history[-5:]:  # Last 5 steps
+            lines = [f"Step {memory.step_number}: I was in {memory.location} doing '{memory.action}'"]
+            if memory.met:
+                lines.append(f"  Met: {', '.join(memory.met)}")
             memory_lines.extend(lines)
         
         return "\\n".join(memory_lines)
@@ -156,20 +140,13 @@ IMPORTANT:
                     except (ValueError, TypeError):
                         vote = None
                 
-                # Parse memory update if provided
-                memory_update = None
-                if "memory_update" in data and data["memory_update"]:
-                    memory_data = data["memory_update"]
-                    memory_update = AgentMemory(
-                        step_number=memory_data.get("step_number", step_number),
-                        observations=memory_data.get("observations", []),
-                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int)) and str(k).isdigit()},
-                        alliances=memory_data.get("alliances", []),
-                        strategy_notes=memory_data.get("strategy_notes", ""),
-                        emotion_state=memory_data.get("emotion_state", "neutral")
-                    )
-                    # Add to memory for backward compatibility with unit tests
-                    self.data.memory_history.append(memory_update)
+                # Create simple memory update based on current data
+                memory_update = AgentMemory(
+                    step_number=step_number,
+                    location=self.data.location,
+                    action=self.data.action,
+                    met=self.data.met
+                )
 
                 return AgentTurn(
                     agent_id=self.data.id,
@@ -201,11 +178,10 @@ IMPORTANT:
         # Create fallback memory
         default_memory = AgentMemory(
             step_number=step_number,
-            observations=[f"Failed to parse response properly"],
-            emotion_state="confused"
+            location=self.data.location,
+            action=self.data.action,
+            met=self.data.met
         )
-        # Add to memory for backward compatibility with unit tests
-        self.data.memory_history.append(default_memory)
         
         return AgentTurn(
             agent_id=self.data.id,

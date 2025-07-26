@@ -43,11 +43,9 @@ class AgentAction(BaseModel):
 
 class AgentMemory(BaseModel):
     step_number: int
-    observations: List[str] = []  # What they observed this step
-    suspicions: Dict[int, str] = {}  # agent_id -> reason for suspicion
-    alliances: List[int] = []  # agents they trust
-    strategy_notes: str = ""  # Their current strategy/plan
-    emotion_state: str = "neutral"  # confident, suspicious, panicked, etc.
+    location: str  # Where they were
+    action: str  # What they were doing
+    met: List[str] = []  # Who they met (agent colors/names)
     
 class AgentTurn(BaseModel):
     agent_id: int
