@@ -347,24 +347,51 @@ const AmongUsSimulation = () => {
               ))}
             </div>
 
-            {/* Emergency Meeting */}
+            {/* Emergency Meeting Chat */}
             {phase === 'emergency_meeting' && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <h3 className="text-lg font-bold mb-3 text-red-800">Emergency Meeting</h3>
-                <p className="text-sm text-red-600 mb-3">Body found in Electrical! Discuss and find the impostor.</p>
+                <p className="text-sm text-red-600 mb-4">Body found in Electrical! Discuss and find the impostor.</p>
                 
-                {Object.entries(currentStepData.agents)
-                  .filter(([_, agentData]) => agentData.status !== 'dead')
-                  .map(([agentId, _]) => (
-                    <div key={agentId} className="mb-3 p-2 bg-white rounded border">
-                      <div className="font-semibold mb-1" style={{color: agentColors[agentId]}}>
-                        {agentId} {agentId === 'yellow' ? '(impostor)' : ''}:
-                      </div>
-                      <div className="text-sm text-gray-700">
-                        {generateReasoning(agentId)}
-                      </div>
-                    </div>
-                  ))}
+                {/* Chat Panel */}
+                <div className="bg-white rounded-lg border max-h-80 overflow-y-auto">
+                  <div className="p-3 border-b bg-gray-50 rounded-t-lg">
+                    <h4 className="font-semibold text-gray-800">Discussion</h4>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {Object.entries(currentStepData.agents)
+                      .filter(([_, agentData]) => agentData.status !== 'dead')
+                      .map(([agentId, _]) => (
+                        <div key={agentId} className="flex items-start gap-3">
+                          {/* Agent Avatar */}
+                          <div
+                            className="w-10 h-10 rounded-full border-2 border-white shadow-sm flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                            style={{backgroundColor: agentColors[agentId]}}
+                          >
+                            {agentId.charAt(0).toUpperCase()}
+                          </div>
+                          
+                          {/* Chat Message */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-sm" style={{color: agentColors[agentId]}}>
+                                {agentId}
+                              </span>
+                              {agentId === 'yellow' && (
+                                <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                                  impostor
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400">now</span>
+                            </div>
+                            <div className="text-sm text-gray-700 leading-relaxed">
+                              {generateReasoning(agentId)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
