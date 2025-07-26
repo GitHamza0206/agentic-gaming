@@ -62,13 +62,21 @@ class Crewmate:
 YOU ARE: {self.data.color} ({self.data.name})
 YOUR ALIBI: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
 
-INVESTIGATION TASKS:
-1. Establish where everyone was during the murder timeframe
-2. Identify who had opportunity to commit the murder
-3. Form your current hypothesis about who the impostor is
-4. Gather evidence to support or challenge theories
+CONVERSATION ANALYSIS:
+- Look at the recent conversation - were you directly questioned or accused?
+- If someone asked YOU a question or made an accusation against YOU, respond to it first
+- If no direct questions for you, then contribute new information or ask questions
 
-IMPORTANT: Remember you are {self.data.color} - don't question yourself or ask where you were!
+INVESTIGATION PRIORITIES:
+1. FIRST: Answer any direct questions asked to you by name/color
+2. THEN: Share your alibi and observations  
+3. THEN: Question others about suspicious behavior
+4. ALWAYS: State who you currently suspect and why
+
+IMPORTANT: 
+- Remember you are {self.data.color} - don't question yourself!
+- Be responsive to the conversation - answer before asking new questions
+- If accused, defend yourself with facts about your alibi
 
 """ + """{
   "think": "your detective analysis - alibis, timelines, opportunity, evidence (always required)",
@@ -78,14 +86,15 @@ IMPORTANT: Remember you are {self.data.color} - don't question yourself or ask w
 }
 
 Examples:
-{"think": "Yellow was alone near Electrical where the body was found. Red and Blue have solid alibis since they were together. Yellow is most suspicious.", "speak": "I was in Navigation with Blue. Yellow, where exactly were you when the murder happened?", "impostor_hypothesis": "yellow", "vote": null}
-{"think": "Red's story keeps changing about their location. First they said Cafeteria, now Electrical. Very suspicious behavior.", "speak": "Red, you first said you were in Cafeteria but now claim Electrical - which is it?", "impostor_hypothesis": "red", "vote": "red"}
+{"think": "Someone just asked me about my card swipe task. I need to explain that I was actually doing it properly and wasn't faking it.", "speak": "Blue, you asked about my card swipe - I was having trouble with the reader, that's why it took multiple attempts. I can confirm I was in Cafeteria the whole time with you, red, and green.", "impostor_hypothesis": "yellow", "vote": null}
+{"think": "No one questioned me directly, so I can share my observations. Yellow's behavior seemed suspicious when they were near the exit.", "speak": "I was doing wires in Cafeteria with everyone. Yellow, I noticed you near the exit several times - did you leave at any point?", "impostor_hypothesis": "yellow", "vote": null}
 
 CRITICAL REQUIREMENTS:
+- CHECK: Did someone ask YOU a direct question? Answer it first!
+- CHECK: Were YOU accused of something? Defend yourself with your alibi!
 - You MUST always have an "impostor_hypothesis" - your current best guess
+- Build on the conversation - don't ignore what others just said
 - Focus on WHO HAD OPPORTUNITY to commit the murder
-- Question inconsistencies in alibis and timelines
-- Use logical deduction based on evidence
 - Respond with valid JSON only!"""}
         ]
         
