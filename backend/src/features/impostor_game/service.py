@@ -356,14 +356,20 @@ Respond with ONLY the agent's name (e.g., "Red", "Blue", etc.) - no explanation 
             # Generate TTS audio for the chosen speaker
             speaker_agent = next((a for a in game.agents if a.id == chosen_speaker.agent_id), None)
             if speaker_agent and chosen_speaker.speak:
-                audio_data = await tts_service.text_to_speech(chosen_speaker.speak, speaker_agent.color)
+                # Pass impostor status for voice personality adjustment
+                audio_data = await tts_service.text_to_speech(
+                    chosen_speaker.speak, 
+                    speaker_agent.color,
+                    is_impostor=speaker_agent.is_impostor
+                )
                 chosen_speaker.audio_base64 = audio_data
             
             game.public_action_history.append(AgentAction(
                 agent_id=chosen_speaker.agent_id,
                 action_type=ActionType.SPEAK,
                 content=chosen_speaker.speak,
-                target_agent_id=None
+                target_agent_id=None,
+                audio_base64=chosen_speaker.audio_base64
             ))
         
         # Now process all votes

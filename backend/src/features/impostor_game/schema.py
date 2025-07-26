@@ -40,6 +40,7 @@ class AgentAction(BaseModel):
     action_type: ActionType
     content: str
     target_agent_id: Optional[str] = None  # Target agent color
+    audio_base64: Optional[str] = None  # Optional - TTS audio data as base64
 
 class AgentMemory(BaseModel):
     step_number: int
