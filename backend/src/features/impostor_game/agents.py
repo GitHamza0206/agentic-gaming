@@ -2,11 +2,7 @@ import re
 import json
 from typing import List, Optional
 from src.core.llm_client import LLMClient
-<<<<<<< HEAD
 from .schema import Agent, AgentAction, ActionType, AgentTurn, AgentMemory
-=======
-from .schema import Agent, AgentAction, ActionType, AgentTurn
->>>>>>> main
 
 class Crewmate:
     def __init__(self, agent_data: Agent, llm_client: LLMClient):
@@ -16,7 +12,6 @@ class Crewmate:
     def get_role_description(self) -> str:
         return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. An emergency meeting has been called. There is an impostor among you and your goal is to find them before they eliminate everyone. Analyze suspicious behaviors, ask relevant questions, and vote to eliminate the impostor."
     
-<<<<<<< HEAD
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
         
@@ -34,18 +29,6 @@ class Crewmate:
             if action.target_agent_id is not None:
                 target_name = agent_names.get(action.target_agent_id, f"Agent{action.target_agent_id}")
                 action_text += f" (targeting {target_name})"
-=======
-    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int) -> AgentTurn:
-        system_prompt = self.get_role_description()
-        
-        # Format public chat history (what everyone can see)
-        public_chat = []
-        for action in public_action_history[-15:]:
-            agent_name = f"Agent{action.agent_id}"
-            action_text = f"{agent_name} {action.action_type.value}: {action.content}"
-            if action.target_agent_id is not None:
-                action_text += f" (targeting Agent{action.target_agent_id})"
->>>>>>> main
             public_chat.append(action_text)
         
         # Format private thoughts (only this agent's thoughts)
@@ -53,7 +36,6 @@ class Crewmate:
         for thought in private_thoughts[-10:]:
             private_chat.append(f"You thought: {thought.content}")
         
-<<<<<<< HEAD
         # Format memory history for better context
         memory_context = self._format_memory_context()
         
@@ -137,41 +119,6 @@ IMPORTANT:
         return "\\n".join(memory_lines)
     
     def _parse_turn(self, response: str, step_number: int) -> AgentTurn:
-=======
-        public_context = "\\n".join(public_chat) if public_chat else "No public discussion yet."
-        private_context = "\\n".join(private_chat) if private_chat else "No private thoughts yet."
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "system", "content": f"Game context: {context}"},
-            {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
-            {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": """You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote:
-
-{
-  "think": "your private thoughts and analysis (always required, detailed)",
-  "speak": "short public statement to other crewmates (optional, null if you don't speak)",
-  "vote": agent_ID_number (optional, null if you don't vote)
-}
-
-Examples:
-{"think": "Red seems suspicious based on their defensive behavior and contradictory statements about their location", "speak": null, "vote": null}
-{"think": "Blue's story about being in electrical doesn't match what Green said earlier, they might be lying", "speak": "Blue, you said you were in electrical but Green saw someone else there", "vote": null}
-{"think": "I've analyzed all the evidence and I'm convinced Green is the impostor based on their voting pattern", "speak": "Green has been deflecting suspicion all game, I think they're the impostor", "vote": 2}
-
-IMPORTANT: 
-- "think" = your private thoughts and detailed analysis (always required, only you can see this)
-- "speak" = what you say out loud to everyone (optional, short public statement, set to null if you stay silent)
-- "vote" = agent ID to eliminate (optional, only when you're confident, set to null otherwise)
-- Keep "speak" SHORT and direct, different from your private thoughts
-- Respond with valid JSON only!"""}
-        ]
-        
-        response = self.llm_client.generate_response(messages, max_tokens=200, temperature=0.7)
-        return self._parse_turn(response)
-    
-    def _parse_turn(self, response: str) -> AgentTurn:
->>>>>>> main
         # Debug: print what LLM actually responds
         print(f"DEBUG - {self.data.name} LLM response: {response}")
         
@@ -209,7 +156,6 @@ IMPORTANT:
                     except (ValueError, TypeError):
                         vote = None
                 
-<<<<<<< HEAD
                 # Parse memory update if provided
                 memory_update = None
                 if "memory_update" in data and data["memory_update"]:
@@ -225,18 +171,12 @@ IMPORTANT:
                     # Add to memory for backward compatibility with unit tests
                     self.data.memory_history.append(memory_update)
 
-=======
->>>>>>> main
                 return AgentTurn(
                     agent_id=self.data.id,
                     think=think,
                     speak=speak,
-<<<<<<< HEAD
                     vote=vote,
                     memory_update=memory_update
-=======
-                    vote=vote
->>>>>>> main
                 )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"DEBUG - JSON parsing error for {self.data.name}: {e}")
@@ -258,7 +198,6 @@ IMPORTANT:
             # Extract a short speaking statement
             speak_content = response.strip()[:80] + "..." if len(response.strip()) > 80 else response.strip()
         
-<<<<<<< HEAD
         # Create fallback memory
         default_memory = AgentMemory(
             step_number=step_number,
@@ -268,35 +207,22 @@ IMPORTANT:
         # Add to memory for backward compatibility with unit tests
         self.data.memory_history.append(default_memory)
         
-=======
->>>>>>> main
         return AgentTurn(
             agent_id=self.data.id,
             think=think_content,
             speak=speak_content,
-<<<<<<< HEAD
             vote=vote_target,
             memory_update=default_memory
-=======
-            vote=vote_target
->>>>>>> main
         )
 
 class Impostor(Crewmate):
     def get_role_description(self) -> str:
         return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. An emergency meeting has been called. Your goal is to avoid being discovered. You must act like an innocent crewmate, deny any accusations, and try to redirect suspicion toward others. Be subtle and convincing. NEVER reveal that you are the impostor."
     
-<<<<<<< HEAD
     def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
         # They could analyze who's being suspected and deflect
         turn = super().choose_action(context, public_action_history, private_thoughts, step_number, all_agents)
-=======
-    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int) -> AgentTurn:
-        # Impostors might be more strategic in their actions
-        # They could analyze who's being suspected and deflect
-        turn = super().choose_action(context, public_action_history, private_thoughts, step_number)
->>>>>>> main
         
         # Make impostor thoughts more strategic
         if "I'm processing the situation..." in turn.think or "I'm analyzing the situation..." in turn.think:

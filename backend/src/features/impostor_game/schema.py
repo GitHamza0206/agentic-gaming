@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from typing import List, Dict, Optional, TYPE_CHECKING
 from enum import Enum
 from pydantic import BaseModel
@@ -6,12 +5,6 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from typing import ForwardRef
 
-=======
-from typing import List, Dict, Optional
-from enum import Enum
-from pydantic import BaseModel
-
->>>>>>> main
 class ActionType(str, Enum):
     THINK = "think"
     SPEAK = "speak"
@@ -37,10 +30,7 @@ class Agent(BaseModel):
     is_impostor: bool = False
     is_alive: bool = True
     votes_received: int = 0
-<<<<<<< HEAD
     memory_history: List['AgentMemory'] = []  # Agent's memory across all steps
-=======
->>>>>>> main
 
 class AgentAction(BaseModel):
     agent_id: int
@@ -48,7 +38,6 @@ class AgentAction(BaseModel):
     content: str
     target_agent_id: Optional[int] = None
 
-<<<<<<< HEAD
 class AgentMemory(BaseModel):
     step_number: int
     observations: List[str] = []  # What they observed this step
@@ -57,17 +46,12 @@ class AgentMemory(BaseModel):
     strategy_notes: str = ""  # Their current strategy/plan
     emotion_state: str = "neutral"  # confident, suspicious, panicked, etc.
     
-=======
->>>>>>> main
 class AgentTurn(BaseModel):
     agent_id: int
     think: str  # Always required - agent's private thoughts
     speak: Optional[str] = None  # Optional - public statement
     vote: Optional[int] = None  # Optional - vote target agent_id
-<<<<<<< HEAD
     memory_update: Optional['AgentMemory'] = None  # Memory from this step
-=======
->>>>>>> main
 
 class GameState(BaseModel):
     game_id: str
@@ -100,10 +84,7 @@ class StepResponse(BaseModel):
     step_number: int
     max_steps: int
     turns: List[AgentTurn]  # Each agent's turn with think/speak/vote
-<<<<<<< HEAD
     conversation_history: List[AgentAction]  # Public conversation history (SPEAK and VOTE actions)
-=======
->>>>>>> main
     eliminated: Optional[str] = None
     winner: Optional[str] = None
     game_over: bool = False
@@ -120,12 +101,8 @@ class GameStateResponse(BaseModel):
     current_votes: Dict[str, int]
     winner: Optional[str] = None
     alive_count: int
-<<<<<<< HEAD
     impostor_alive: bool
 
 # Update forward references
 Agent.model_rebuild()
 AgentTurn.model_rebuild()
-=======
-    impostor_alive: bool
->>>>>>> main
