@@ -156,11 +156,22 @@ class ImpostorGameService:
         step_turns = []
         
         # Generate turns for all alive agents
-        context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
-        if game.step_number == 1:
-            context = f"{context_base} There is an impostor among you!"
-        else:
-            context = f"{context_base} Find the impostor!"
+        if game.step_number < 25:  # Normal conversation phase
+            context_base = f"Step {game.step_number}/{game.max_steps}. You are doing tasks around the ship with {len(alive_agents)} crewmates."
+            if game.step_number == 1:
+                context = f"{context_base} You just started your shift. Share your thoughts about the tasks or your fellow crewmates."
+            elif game.step_number < 10:
+                context = f"{context_base} Continue doing your tasks. You can chat casually with others or share observations."
+            elif game.step_number < 20:
+                context = f"{context_base} You've been working for a while. Share any suspicions or observations about other crewmates."
+            else:
+                context = f"{context_base} Something feels off. Be more alert and share any concerns you might have."
+        else:  # Emergency meeting phase
+            context_base = f"EMERGENCY MEETING! {game.meeting_reason}. Step {game.step_number}/{game.max_steps}. Alive crewmates: {len(alive_agents)}."
+            if game.step_number == 25:
+                context = f"{context_base} There is an impostor among you! Share what you know and discuss who seems suspicious."
+            else:
+                context = f"{context_base} Continue the discussion. Find the impostor before it's too late!"
         
         for agent_data in alive_agents:
             agent = self._create_agent(agent_data)
@@ -168,9 +179,9 @@ class ImpostorGameService:
             # Get agent's private thoughts
             private_thoughts = game.private_thoughts.get(agent_data.id, [])
             
-            # Add special context for reporter in first step
+            # Add special context for reporter when emergency meeting starts
             agent_context = context
-            if game.step_number == 1 and agent_data.id == game.reporter_id:
+            if game.step_number == 25 and agent_data.id == game.reporter_id:
                 agent_context = f"{context} You are the one who called this meeting because: {game.meeting_reason}"
             
             turn = agent.choose_action(agent_context, game.public_action_history, private_thoughts, game.step_number, game.agents)
