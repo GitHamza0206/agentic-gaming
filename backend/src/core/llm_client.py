@@ -4,7 +4,7 @@ import anthropic
 
 class LLMClient:
     def __init__(self):
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "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")
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
         self.client = anthropic.Anthropic(api_key=api_key)
     
     def generate_response(
