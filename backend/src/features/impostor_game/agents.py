@@ -12,16 +12,23 @@ class Crewmate:
     def get_role_description(self) -> str:
         return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. An emergency meeting has been called. There is an impostor among you and your goal is to find them before they eliminate everyone. Analyze suspicious behaviors, ask relevant questions, and vote to eliminate the impostor."
     
-    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int) -> AgentTurn:
+    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
+        
+        # Create agent ID to name mapping
+        agent_names = {}
+        if all_agents:
+            for agent in all_agents:
+                agent_names[agent.id] = agent.name
         
         # Format public chat history (what everyone can see)
         public_chat = []
         for action in public_action_history[-15:]:
-            agent_name = f"Agent{action.agent_id}"
+            agent_name = agent_names.get(action.agent_id, f"Agent{action.agent_id}")
             action_text = f"{agent_name} {action.action_type.value}: {action.content}"
             if action.target_agent_id is not None:
-                action_text += f" (targeting Agent{action.target_agent_id})"
+                target_name = agent_names.get(action.target_agent_id, f"Agent{action.target_agent_id}")
+                action_text += f" (targeting {target_name})"
             public_chat.append(action_text)
         
         # Format private thoughts (only this agent's thoughts)
@@ -35,10 +42,25 @@ class Crewmate:
         public_context = "\\n".join(public_chat) if public_chat else "No public discussion yet."
         private_context = "\\n".join(private_chat) if private_chat else "No private thoughts yet."
         
+        # Add detailed meeting participants information
+        meeting_info = ""
+        if all_agents:
+            alive_agents = [agent for agent in all_agents if agent.is_alive]
+            dead_agents = [agent for agent in all_agents if not agent.is_alive]
+            
+            alive_list = [f"{agent.name} ({agent.color})" for agent in alive_agents]
+            meeting_info = f"MEETING PARTICIPANTS: {', '.join(alive_list)} are present in this emergency meeting."
+            
+            if dead_agents:
+                dead_list = [f"{agent.name} ({agent.color})" for agent in dead_agents]
+                meeting_info += f" ELIMINATED: {', '.join(dead_list)} have been eliminated and are not in the meeting."
+            
+            meeting_info += f" Total alive: {len(alive_agents)}/8 players remaining."
+        
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": f"Game context: {context}"},
-            {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context}"},
+            {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context} \\n{meeting_info}"},
             {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
             {"role": "user", "content": f"""You must respond in JSON format with your turn. You ALWAYS think privately, and can optionally speak publicly or vote.
@@ -141,12 +163,12 @@ IMPORTANT:
                     memory_update = AgentMemory(
                         step_number=memory_data.get("step_number", step_number),
                         observations=memory_data.get("observations", []),
-                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int))},
+                        suspicions={int(k): v for k, v in memory_data.get("suspicions", {}).items() if isinstance(k, (str, int)) and str(k).isdigit()},
                         alliances=memory_data.get("alliances", []),
                         strategy_notes=memory_data.get("strategy_notes", ""),
                         emotion_state=memory_data.get("emotion_state", "neutral")
                     )
-                    # Add to agent's memory history
+                    # Add to memory for backward compatibility with unit tests
                     self.data.memory_history.append(memory_update)
 
                 return AgentTurn(
@@ -182,6 +204,7 @@ IMPORTANT:
             observations=[f"Failed to parse response properly"],
             emotion_state="confused"
         )
+        # Add to memory for backward compatibility with unit tests
         self.data.memory_history.append(default_memory)
         
         return AgentTurn(
@@ -196,10 +219,10 @@ class Impostor(Crewmate):
     def get_role_description(self) -> str:
         return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. An emergency meeting has been called. Your goal is to avoid being discovered. You must act like an innocent crewmate, deny any accusations, and try to redirect suspicion toward others. Be subtle and convincing. NEVER reveal that you are the impostor."
     
-    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int) -> AgentTurn:
+    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
         # They could analyze who's being suspected and deflect
-        turn = super().choose_action(context, public_action_history, private_thoughts, step_number)
+        turn = super().choose_action(context, public_action_history, private_thoughts, step_number, all_agents)
         
         # Make impostor thoughts more strategic
         if "I'm processing the situation..." in turn.think or "I'm analyzing the situation..." in turn.think:

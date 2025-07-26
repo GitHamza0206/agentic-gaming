@@ -1,11 +1,11 @@
 import os
 from typing import List, Dict
-from cerebras.cloud.sdk import Cerebras
+import anthropic
 
 class LLMClient:
     def __init__(self):
-        api_key = os.environ.get("CEREBRAS_API_KEY")
-        self.client = Cerebras(api_key=api_key)
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "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")
+        self.client = anthropic.Anthropic(api_key=api_key)
     
     def generate_response(
         self, 
@@ -14,20 +14,29 @@ class LLMClient:
         temperature: float = 0.7
     ) -> str:
         try:
-            stream = self.client.chat.completions.create(
-                messages=messages,
-                model="qwen-3-235b-a22b",
-                stream=True,
-                max_completion_tokens=max_tokens,
+            # Convert messages format for Anthropic
+            system_message = ""
+            conversation_messages = []
+            
+            # Filter out system messages and extract system content
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_message = msg["content"]
+                elif msg["role"] in ["user", "assistant"]:
+                    conversation_messages.append(msg)
+            
+            # Anthropic requires at least one message
+            if not conversation_messages:
+                conversation_messages = [{"role": "user", "content": "Continue the conversation."}]
+            
+            response = self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=max_tokens,
                 temperature=temperature,
-                top_p=0.95
+                system=system_message if system_message else None,
+                messages=conversation_messages
             )
             
-            response = ""
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    response += chunk.choices[0].delta.content
-            
-            return response.strip()
+            return response.content[0].text.strip()
         except Exception as e:
             return f"Erreur de génération: {str(e)}"

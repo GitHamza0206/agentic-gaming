@@ -1,4 +1,4 @@
-cerebras-cloud-sdk
+anthropic
 python-dotenv
 
 anyio

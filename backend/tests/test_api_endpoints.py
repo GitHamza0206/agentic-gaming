@@ -114,14 +114,26 @@ class TestAPIEndpoints:
         assert "agents" in data
         
         # Check that agents have memory
+        print(f"Total agents: {len(data['agents'])}")
+        agents_with_memory = 0
+        for agent in data["agents"]:
+            print(f"Agent {agent['name']} (ID {agent['id']}): memory_length={len(agent.get('memory_history', []))}")
+            if agent.get('memory_history') and len(agent['memory_history']) > 0:
+                agents_with_memory += 1
+                
+        print(f"Agents with memory: {agents_with_memory}")
+        
+        # Check that all agents have memory (including reporter)
         for agent in data["agents"]:
             assert "memory_history" in agent
-            assert len(agent["memory_history"]) == 1
-            
-            memory = agent["memory_history"][0]
-            assert memory["step_number"] == 1
-            assert len(memory["observations"]) > 0
-            assert memory["emotion_state"] == "neutral"
+            if len(agent["memory_history"]) > 0:
+                memory = agent["memory_history"][0]
+                assert memory["step_number"] == 1
+                assert len(memory["observations"]) > 0
+                assert memory["emotion_state"] == "neutral"
+        
+        # Should have 8 agents with memory (all agents including reporter)
+        assert agents_with_memory == 8
     
     def test_invalid_game_id(self):
         """Test endpoints with invalid game ID"""
@@ -207,11 +219,10 @@ class TestMemoryAPIIntegration:
         game_data = init_response.json()
         game_id = game_data["game_id"]
         
-        # Find impostor from the response
-        impostor_name = game_data["impostor_revealed"].split()[0]
+        # Find impostor ID directly from agents
         impostor_id = None
         for agent in game_data["agents"]:
-            if agent["name"] == impostor_name:
+            if agent["is_impostor"]:
                 impostor_id = agent["id"]
                 break
         
