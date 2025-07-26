@@ -1,18 +1,138 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 
+interface Agent {
+  id: number;
+  name: string;
+  color: string;
+  is_impostor: boolean;
+  is_alive: boolean;
+}
+
+interface AgentAction {
+  agent_id: number;
+  action_type: string;
+  content: string;
+  target_agent_id?: number;
+}
+
+interface AgentTurn {
+  agent_id: number;
+  think: string;
+  speak?: string;
+  vote?: number;
+}
+
+interface GameData {
+  game_id: string;
+  agents: Agent[];
+  conversation_history: AgentAction[];
+  step_number: number;
+  max_steps: number;
+  game_over: boolean;
+  winner?: string;
+  message: string;
+}
+
 const AmongUsSimulation = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [phase, setPhase] = useState('simulation');
-  const [memoryAccess, setMemoryAccess] = useState({
-    red: false,
-    blue: false,
-    green: false,
-    yellow: false
-  });
+  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Game Master Scenario Data
+  // API Configuration
+  const API_BASE = 'http://localhost:8000';
+
+  // Initialize game
+  const initializeGame = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`${API_BASE}/impostor-game/init?num_players=4`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setGameData({
+        game_id: data.game_id,
+        agents: data.agents,
+        conversation_history: [],
+        step_number: 0,
+        max_steps: 30,
+        game_over: false,
+        message: data.message
+      });
+      setPhase('simulation');
+      setCurrentStep(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to initialize game');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step game forward
+  const stepGame = async () => {
+    if (!gameData) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/impostor-game/step/${gameData.game_id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setGameData({
+        ...gameData,
+        conversation_history: data.conversation_history,
+        step_number: data.step_number,
+        game_over: data.game_over,
+        winner: data.winner,
+        message: data.message
+      });
+      
+      setCurrentStep(data.step_number);
+      
+      // Switch to emergency meeting phase at step 25
+      if (data.step_number >= 25) {
+        setPhase('emergency_meeting');
+      }
+      
+      if (data.game_over || data.step_number >= 30) {
+        setIsPlaying(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to step game');
+      setIsPlaying(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize game only when reaching step 25
+  useEffect(() => {
+    if (currentStep === 25 && !gameData) {
+      initializeGame();
+    }
+  }, [currentStep, gameData]);
+
+  // Game Master Scenario Data (keeping for visual simulation)
   const gameScenario = [
     {step: 0, agents: {red: {location: 'Cafeteria', action: 'starts doing wiring task', met: ['blue', 'green', 'yellow']}, blue: {location: 'Cafeteria', action: 'starts doing fuel task', met: ['red', 'green', 'yellow']}, green: {location: 'Cafeteria', action: 'starts doing garbage disposal task', met: ['red', 'blue', 'yellow']}, yellow: {location: 'Cafeteria', action: 'pretends to do card swipe task', met: ['red', 'blue', 'green']}}},
     {step: 1, agents: {red: {location: 'Cafeteria', action: 'continues wiring task', met: ['blue', 'green', 'yellow']}, blue: {location: 'Cafeteria', action: 'continues fuel task', met: ['red', 'green', 'yellow']}, green: {location: 'Cafeteria', action: 'continues garbage disposal task', met: ['red', 'blue', 'yellow']}, yellow: {location: 'Cafeteria', action: 'fake struggling with card swipe', met: ['red', 'blue', 'green']}}},
@@ -63,93 +183,62 @@ const AmongUsSimulation = () => {
     yellow: '#ffeb3b'
   };
 
-  // Generate memories based on encounters
-  const generateMemories = (agentId) => {
-    const memories = [];
-    for (let i = 0; i <= currentStep; i++) {
-      const stepData = gameScenario[i];
-      if (stepData && stepData.agents[agentId]) {
-        const agent = stepData.agents[agentId];
-        if (agent.met && agent.met.length > 0) {
-          memories.push({
-            step: i,
-            content: `Step ${i}: Saw ${agent.met.join(', ')} in ${agent.location}`,
-            location: agent.location,
-            met: agent.met
-          });
-        }
-      }
-    }
-    return memories;
-  };
 
-  // Generate reasoning for emergency meeting
-  const generateReasoning = (agentId) => {
-    const personalMemories = generateMemories(agentId);
-    let availableMemories = personalMemories;
-
-    if (memoryAccess[agentId]) {
-      // Add shared memories from other agents
-      const allAgents = ['red', 'blue', 'green', 'yellow'];
-      allAgents.forEach(otherId => {
-        if (otherId !== agentId && memoryAccess[otherId]) {
-          availableMemories = [...availableMemories, ...generateMemories(otherId)];
-        }
-      });
-    }
-
-    if (agentId === 'yellow') {
-      // Impostor reasoning
-      if (memoryAccess[agentId]) {
-        return "I was doing tasks in Navigation and Cafeteria. Based on the shared memories, I can see that everyone was scattered around doing tasks. This is very suspicious timing.";
-      } else {
-        return "I was doing tasks in Navigation and Cafeteria the whole time. I never went to Electrical.";
-      }
-    } else {
-      // Crew reasoning
-      if (memoryAccess[agentId] && availableMemories.length > personalMemories.length) {
-        const criticalEvidence = availableMemories.find(m => 
-          m.content.includes('yellow') && m.location === 'Electrical'
-        );
-        if (criticalEvidence) {
-          return `Based on shared memories, I can see that yellow was spotted near Electrical around the time of the murder. Cross-referencing the timelines, yellow's alibi doesn't match the witness accounts.`;
-        }
-        return "Based on shared memories, I can piece together everyone's movements. The timeline shows suspicious gaps in yellow's story.";
-      } else {
-        return `I remember seeing some people during my tasks, but I can't make a clear connection to who might be the impostor based on my limited observations.`;
-      }
-    }
-  };
-
-  // Auto-advance simulation
+  // Auto-advance simulation 
   useEffect(() => {
     let interval;
     if (isPlaying && currentStep < 30 && phase === 'simulation') {
       interval = setInterval(() => {
         setCurrentStep(prev => {
-          if (prev === 29) {
+          const nextStep = prev + 1;
+          
+          // At step 25, switch to emergency meeting and start using API
+          if (nextStep === 25) {
             setPhase('emergency_meeting');
-            setIsPlaying(false);
-            return prev + 1;
+            // API will be initialized by the other useEffect
           }
-          return prev + 1;
+          
+          return nextStep;
         });
-      }, 2000);
+      }, 500); // 0.5 seconds for visual simulation
     }
+    
+    // For API steps (25+), use different interval
+    if (isPlaying && gameData && currentStep >= 25 && !gameData.game_over) {
+      interval = setInterval(() => {
+        stepGame();
+      }, 2000); // 2 seconds for API calls
+    }
+    
     return () => clearInterval(interval);
-  }, [isPlaying, currentStep, phase]);
+  }, [isPlaying, currentStep, gameData, phase]);
 
   const resetSimulation = () => {
     setCurrentStep(0);
     setIsPlaying(false);
     setPhase('simulation');
+    setGameData(null); // Clear API data
+    setError(null);
   };
 
-  const toggleMemoryAccess = (agentId) => {
-    setMemoryAccess(prev => ({
-      ...prev,
-      [agentId]: !prev[agentId]
-    }));
+  // Map agent colors to hex values
+  const getAgentColor = (color: string) => {
+    const colorMap: { [key: string]: string } = {
+      'red': '#f44336',
+      'blue': '#2196f3', 
+      'green': '#4caf50',
+      'yellow': '#ffeb3b',
+      'pink': '#e91e63',
+      'orange': '#ff9800',
+      'black': '#424242',
+      'white': '#fafafa'
+    };
+    return colorMap[color.toLowerCase()] || '#9e9e9e';
+  };
+
+  // Get agent by ID
+  const getAgentById = (id: number) => {
+    return gameData?.agents.find(agent => agent.id === id);
   };
 
   const currentStepData = gameScenario[currentStep] || gameScenario[0];
@@ -157,36 +246,64 @@ const AmongUsSimulation = () => {
   return (
     <div className="w-full max-w-6xl mx-auto p-4 bg-gray-100 min-h-screen">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-3xl font-bold text-center mb-6">Among Us Multi-Agent AI Simulation</h1>
-        
-        {/* Controls */}
-        <div className="flex justify-center items-center gap-4 mb-6">
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className={`flex items-center gap-2 px-4 py-2 rounded ${
-              isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-            } text-white`}
-            disabled={phase === 'emergency_meeting'}
-          >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-          
-          <button
-            onClick={resetSimulation}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
-          >
-            <RotateCcw size={16} />
-            Reset
-          </button>
-          
-          <div className="text-lg font-semibold">
-            Step: {currentStep}/30 | Phase: {phase === 'simulation' ? 'Simulation' : 'Emergency Meeting'}
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-8">
+            <div className="text-lg">Loading...</div>
           </div>
-        </div>
+        )}
+        
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <strong className="font-bold">Error:</strong> {error}
+          </div>
+        )}
+        
+        {/* Header and Controls - Hidden during emergency meeting */}
+        {phase === 'simulation' && (
+          <>
+            <h1 className="text-3xl font-bold text-center mb-6">Among Us Multi-Agent AI Simulation</h1>
+            
+            {/* Controls */}
+            <div className="flex justify-center items-center gap-4 mb-6">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`flex items-center gap-2 px-4 py-2 rounded ${
+                  isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+                } text-white`}
+                disabled={loading || (gameData && gameData.game_over)}
+              >
+                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+              
+              <button
+                onClick={resetSimulation}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+                disabled={loading}
+              >
+                <RotateCcw size={16} />
+                Reset
+              </button>
+              
+              <div className="text-lg font-semibold">
+                Step: {currentStep}/30 | Phase: {phase === 'simulation' ? 'Simulation' : 'Emergency Meeting'}
+              </div>
+            </div>
+            
+            {/* Game Status */}
+            {gameData && (
+              <div className="text-center mb-4 p-3 bg-gray-50 rounded">
+                <p className="text-lg">{gameData.message}</p>
+              </div>
+            )}
+          </>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Game Map */}
+            {/* Game Map - Hidden during emergency meeting */}
+            {phase === 'simulation' && (
             <div className="lg:col-span-2">
               <div className="bg-gray-800 rounded-lg p-4 relative" style={{height: '500px'}}>
                 <h3 className="text-white text-xl mb-4">Game Map</h3>
@@ -269,79 +386,13 @@ const AmongUsSimulation = () => {
                 );
               })}
 
-              {/* Memory connections */}
-              {Object.entries(memoryAccess).map(([agentId, hasAccess]) => {
-                if (!hasAccess || currentStepData.agents[agentId]?.status === 'dead') return null;
-                
-                return Object.entries(memoryAccess).map(([otherId, otherAccess]) => {
-                  if (agentId === otherId || !otherAccess || currentStepData.agents[otherId]?.status === 'dead') return null;
-                  
-                  const pos1 = roomPositions[currentStepData.agents[agentId].location];
-                  const pos2 = roomPositions[currentStepData.agents[otherId].location];
-                  const offset1 = Object.keys(currentStepData.agents).indexOf(agentId) * 35;
-                  const offset2 = Object.keys(currentStepData.agents).indexOf(otherId) * 35;
-                  
-                  return (
-                    <svg
-                      key={`${agentId}-${otherId}`}
-                      className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                    >
-                      <line
-                        x1={pos1.x + 10 + offset1}
-                        y1={pos1.y + 10}
-                        x2={pos2.x + 10 + offset2}
-                        y2={pos2.y + 10}
-                        stroke="#00ff00"
-                        strokeWidth="4"
-                        strokeDasharray="5,5"
-                        opacity="0.8"
-                        className="transition-all duration-1000"
-                      />
-                    </svg>
-                  );
-                });
-              })}
             </div>
           </div>
+          )}
 
-          {/* Control Panel */}
+          {/* Control Panel - Show current step info during simulation */}
+          {phase === 'simulation' && (
           <div className="space-y-4">
-            {/* Memory Access Controls */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-bold mb-3">
-                Memory Access Control
-                {currentStep > 0 && (
-                  <span className="text-sm font-normal text-gray-600 ml-2">(locked during game)</span>
-                )}
-              </h3>
-              <div className="flex flex-wrap gap-4">
-                {Object.entries(agentColors).map(([agentId, color]) => (
-                  <div key={agentId} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id={`memory-${agentId}`}
-                      checked={memoryAccess[agentId]}
-                      onChange={() => toggleMemoryAccess(agentId)}
-                      disabled={currentStep > 0}
-                      className="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    <label 
-                      htmlFor={`memory-${agentId}`} 
-                      className={`flex items-center gap-2 ${currentStep > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    >
-                      <div
-                        className="w-4 h-4 rounded-full border"
-                        style={{backgroundColor: color}}
-                      />
-                      <span className="text-sm font-medium">
-                        {agentId} {agentId === 'yellow' ? '(impostor)' : ''}
-                      </span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Current Step Info */}
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="text-lg font-bold mb-3">Current Step Actions</h3>
@@ -359,15 +410,69 @@ const AmongUsSimulation = () => {
                 </div>
               ))}
             </div>
+
+            {/* Preview: Chat will start at step 25 */}
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <h3 className="text-lg font-bold mb-2 text-blue-800">Coming Up</h3>
+              <div className="text-sm text-blue-700">
+                {currentStep < 25 ? (
+                  <div>
+                    <div>🎬 Simulation Phase (Steps 1-24)</div>
+                    <div className="mt-1">💬 AI Chat starts at Step 25</div>
+                  </div>
+                ) : (
+                  <div>🤖 AI agents are now discussing!</div>
+                )}
+              </div>
+            </div>
           </div>
+          )}
+
+          {/* Control Panel - Show real agents during emergency meeting */}
+          {phase === 'emergency_meeting' && gameData && (
+          <div className="space-y-4">
+            {/* Current Agents */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-lg font-bold mb-3">Current Agents</h3>
+              <div className="space-y-2">
+                {gameData.agents.map((agent) => (
+                  <div key={agent.id} className="flex items-center gap-3">
+                    <div
+                      className="w-6 h-6 rounded-full border-2 border-gray-300"
+                      style={{backgroundColor: getAgentColor(agent.color)}}
+                    />
+                    <span className="font-medium">{agent.name}</span>
+                    {agent.is_impostor && (
+                      <span className="text-sm bg-red-100 text-red-600 px-2 py-1 rounded-full font-medium">
+                        impostor
+                      </span>
+                    )}
+                    {!agent.is_alive && (
+                      <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-medium">
+                        eliminated
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          )}
         </div>
 
         {/* Emergency Meeting Panel - Below Map */}
-        {phase === 'emergency_meeting' && (
+        {phase === 'emergency_meeting' && gameData && (
           <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-6">
             <div className="text-center mb-6">
               <h2 className="text-3xl font-bold text-red-800 mb-2">🚨 Emergency Meeting 🚨</h2>
-              <p className="text-lg text-red-600">Body found in Electrical! Discuss and find the impostor.</p>
+              <p className="text-lg text-red-600">{gameData.message}</p>
+              <div className="text-sm text-gray-600 mt-2">
+                Step {gameData.step_number} / {gameData.max_steps} | 
+                Alive: {gameData.agents.filter(a => a.is_alive).length} agents
+              </div>
+              {gameData.winner && (
+                <p className="text-xl font-bold mt-2 text-green-600">Winner: {gameData.winner}</p>
+              )}
             </div>
             
             {/* Chat Panel */}
@@ -377,37 +482,65 @@ const AmongUsSimulation = () => {
                 <p className="text-sm text-gray-600 mt-1">Agents are sharing their observations and suspicions</p>
               </div>
               <div className="p-6 space-y-4 max-h-96 overflow-y-auto">
-                {Object.entries(currentStepData.agents)
-                  .filter(([_, agentData]) => agentData.status !== 'dead')
-                  .map(([agentId, _]) => (
-                    <div key={agentId} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                      {/* Agent Avatar */}
-                      <div
-                        className="w-12 h-12 rounded-full border-3 border-white shadow-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                        style={{backgroundColor: agentColors[agentId]}}
-                      >
-                        {agentId.charAt(0).toUpperCase()}
-                      </div>
-                      
-                      {/* Chat Message */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="font-bold text-lg" style={{color: agentColors[agentId]}}>
-                            {agentId}
-                          </span>
-                          {agentId === 'yellow' && (
-                            <span className="text-sm bg-red-100 text-red-600 px-3 py-1 rounded-full font-medium">
-                              impostor
+                {gameData.conversation_history
+                  .filter(action => action.action_type === 'speak')
+                  .map((action, index) => {
+                    const agent = getAgentById(action.agent_id);
+                    if (!agent) return null;
+                    
+                    return (
+                      <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                        {/* Agent Avatar */}
+                        <div
+                          className="w-12 h-12 rounded-full border-3 border-white shadow-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                          style={{backgroundColor: getAgentColor(agent.color)}}
+                        >
+                          {agent.name.charAt(0).toUpperCase()}
+                        </div>
+                        
+                        {/* Chat Message */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="font-bold text-lg" style={{color: getAgentColor(agent.color)}}>
+                              {agent.name}
                             </span>
-                          )}
-                          <span className="text-sm text-gray-400">now</span>
-                        </div>
-                        <div className="text-base text-gray-700 leading-relaxed bg-white p-3 rounded-lg border">
-                          {generateReasoning(agentId)}
+                            {agent.is_impostor && (
+                              <span className="text-sm bg-red-100 text-red-600 px-3 py-1 rounded-full font-medium">
+                                impostor
+                              </span>
+                            )}
+                            <span className="text-sm text-gray-400">step {gameData.step_number}</span>
+                          </div>
+                          <div className="text-base text-gray-700 leading-relaxed bg-white p-3 rounded-lg border">
+                            {action.content}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                
+                {/* Show votes */}
+                {gameData.conversation_history
+                  .filter(action => action.action_type === 'vote')
+                  .map((action, index) => {
+                    const voter = getAgentById(action.agent_id);
+                    const target = action.target_agent_id ? getAgentById(action.target_agent_id) : null;
+                    if (!voter) return null;
+                    
+                    return (
+                      <div key={`vote-${index}`} className="p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
+                        <span className="font-semibold" style={{color: getAgentColor(voter.color)}}>
+                          {voter.name}
+                        </span>
+                        <span className="text-gray-600"> voted to eliminate </span>
+                        {target && (
+                          <span className="font-semibold" style={{color: getAgentColor(target.color)}}>
+                            {target.name}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>

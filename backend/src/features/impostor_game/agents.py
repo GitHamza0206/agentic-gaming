@@ -12,7 +12,7 @@ class Crewmate:
     def get_role_description(self) -> str:
         return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. You are currently in an EMERGENCY MEETING discussing who the impostor is. Someone found a dead body, so now everyone is gathered at the meeting table to debate and vote. Your goal is to find the impostor before they eliminate everyone. Share what you saw, analyze others' stories for inconsistencies, and vote to eliminate the impostor."
     
-    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
+    async def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
         
         # Create agent ID to name mapping
@@ -86,7 +86,7 @@ IMPORTANT:
 - Respond with valid JSON only!"""}
         ]
         
-        response = self.llm_client.generate_response(messages, max_tokens=300, temperature=0.7)
+        response = await self.llm_client.generate_response(messages, max_tokens=300, temperature=0.7)
         return self._parse_turn(response, step_number)
     
     def _format_memory_context(self) -> str:
@@ -196,10 +196,10 @@ class Impostor(Crewmate):
     def get_role_description(self) -> str:
         return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. You are currently in an EMERGENCY MEETING at the meeting table. Someone found a dead body and now everyone is discussing who the impostor is. Your goal is to avoid being discovered and eliminated. Act like an innocent crewmate, provide believable alibis, deflect suspicion toward others, and never reveal that you are the impostor. Be strategic and convincing."
     
-    def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
+    async def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
         # They could analyze who's being suspected and deflect
-        turn = super().choose_action(context, public_action_history, private_thoughts, step_number, all_agents)
+        turn = await super().choose_action(context, public_action_history, private_thoughts, step_number, all_agents)
         
         # Make impostor thoughts more strategic
         if "I'm processing the situation..." in turn.think or "I'm analyzing the situation..." in turn.think:
