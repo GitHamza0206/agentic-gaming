@@ -155,6 +155,64 @@ IMPORTANT: Answer EXACTLY in this format, nothing else!"""}
         response = self.llm_client.generate_response(messages, max_tokens=150, temperature=0.7)
         return response if response else f"I need to think about this situation..."
     
+    def decide_action(self, dialogue_history: List[Statement], current_votes: List, alive_agents: List[Agent]) -> str:
+        """Decide whether to speak or vote at this moment"""
+        role_desc = self.get_role_description()
+        
+        # Build context from recent dialogue and current votes
+        recent_statements = dialogue_history[-8:] if dialogue_history else []
+        dialogue_context = "\n".join([f"{s.agent_name}: {s.content}" for s in recent_statements])
+        
+        # Build vote context
+        vote_context = ""
+        if current_votes:
+            vote_summary = {}
+            for vote in current_votes:
+                target = vote.target_name
+                if target in vote_summary:
+                    vote_summary[target] += 1
+                else:
+                    vote_summary[target] = 1
+            vote_context = f"\nCurrent votes: {', '.join([f'{target}: {count}' for target, count in vote_summary.items()])}"
+        
+        # Check if this agent has already voted
+        has_voted = any(vote.voter_id == self.data.id for vote in current_votes)
+        if has_voted:
+            return "speak"  # If already voted, can only speak
+        
+        # Check if mentioned or under suspicion
+        mentioned_recently = any(self.data.name.lower() in s.content.lower() for s in recent_statements)
+        
+        messages = [
+            {"role": "system", "content": role_desc},
+            {"role": "system", "content": f"Recent discussion:\n{dialogue_context}" if dialogue_context else "No previous discussion."},
+            {"role": "system", "content": f"Current voting situation:{vote_context}" if vote_context else "No votes cast yet."},
+            {"role": "user", "content": "You can either SPEAK (share thoughts/defend/accuse) or VOTE (cast your vote now). What do you want to do? Answer only 'SPEAK' or 'VOTE' followed by a brief reason (max 8 words)."}
+        ]
+        
+        try:
+            response = self.llm_client.generate_response(messages, max_tokens=25, temperature=0.6)
+            response_upper = response.upper().strip()
+            if response_upper.startswith('VOTE'):
+                return "vote"
+            elif response_upper.startswith('SPEAK'):
+                return "speak"
+            else:
+                # Fallback: if mentioned recently or many votes cast, tend to speak; otherwise vote
+                if mentioned_recently or len(current_votes) >= len(alive_agents) // 2:
+                    return "speak"
+                else:
+                    return "vote" if random.random() < 0.4 else "speak"
+        except Exception as e:
+            print(f"LLM error in decide_action for {self.data.name}: {e}")
+            # Fallback logic
+            if mentioned_recently:
+                return "speak"
+            elif len(current_votes) >= len(alive_agents) // 2:
+                return "vote"  # Many people voted, time to vote
+            else:
+                return "speak"  # Default to speaking early in meeting
+
     def should_raise_hand(self, dialogue_history: List[Statement]) -> bool:
         """Use LLM to decide whether to raise hand for follow-up statement"""
         role_desc = self.get_role_description()
@@ -564,39 +622,164 @@ class SupervisorAgent:
         
         return enhanced_action
     
-    def conduct_full_meeting(self, agents: List, reporter_id: int, meeting_reason: str) -> MeetingResult:
-        """Conduct a full round table meeting with all phases"""
-        print(f"\n=== ROUND TABLE MEETING STARTED ===")
-        print(f"Reporter: Agent {reporter_id}")
+    def conduct_realtime_meeting(self, agents: List, reporter_id: int, meeting_reason: str) -> MeetingResult:
+        """Conduct a meeting where agents can vote at any time during discussion"""
+        print(f"\n=== REAL-TIME MEETING STARTED ===")
         print(f"Reason: {meeting_reason}")
-        print(f"Participants: {len(agents)} alive agents")
+        print(f"Participants: {[a.data.name for a in agents]}")
         
         dialogue_history = []
+        current_votes = []  # Track votes as they come in
         step_count = 0
         max_steps = 15
         
-        # Phase 1: Initial Statements
-        print(f"\n--- PHASE 1: INITIAL STATEMENTS ---")
-        dialogue_history.extend(self._conduct_initial_statements(agents, reporter_id, meeting_reason, step_count))
-        step_count += len(agents)
+        # Phase 1: Reporter's initial statement
+        print(f"\n--- INITIAL REPORT ---")
+        reporter = next((a for a in agents if a.data.id == reporter_id), None)
+        if reporter:
+            context = {
+                'meeting_reason': meeting_reason,
+                'alive_count': len(agents),
+                'is_reporter': True
+            }
+            statement_content = reporter.generate_statement(context, [], False)
+            statement = Statement(
+                agent_id=reporter.data.id,
+                agent_name=reporter.data.name,
+                content=statement_content,
+                step_number=step_count,
+                is_follow_up=False
+            )
+            dialogue_history.append(statement)
+            print(f"  {reporter.data.name}: {statement_content}")
+            step_count += 1
         
-        # Phase 2: Follow-up Discussion (with raise hand mechanic)
-        print(f"\n--- PHASE 2: FOLLOW-UP DISCUSSION ---")
-        follow_up_statements = self._conduct_follow_up_phase(agents, dialogue_history, step_count, max_steps)
-        dialogue_history.extend(follow_up_statements)
-        step_count += len(follow_up_statements)
+        # Phase 2: Real-time discussion and voting
+        print(f"\n--- REAL-TIME DISCUSSION & VOTING ---")
         
-        # Phase 3: Voting
-        print(f"\n--- PHASE 3: VOTING ---")
-        votes = self._conduct_voting_phase(agents, dialogue_history)
+        while step_count < max_steps:
+            # Check if everyone has voted
+            voted_agents = {vote.voter_id for vote in current_votes}
+            if len(voted_agents) >= len(agents):
+                print(f"\n  All agents have voted. Proceeding to results...")
+                break
+            
+            # Select agents who can still participate
+            available_agents = [a for a in agents if a.data.id not in voted_agents or 
+                              any(a.data.name.lower() in s.content.lower() for s in dialogue_history[-3:])]
+            
+            if not available_agents:
+                print(f"\n  No more agents can participate. Proceeding to results...")
+                break
+            
+            # Each available agent decides: speak or vote?
+            random.shuffle(available_agents)
+            
+            for agent in available_agents[:3]:  # Limit to 3 agents per step
+                if step_count >= max_steps:
+                    break
+                
+                # Agent decides action based on current context
+                action_type = agent.decide_action(dialogue_history, current_votes, [a.data for a in agents])
+                
+                if action_type == "vote":
+                    # Agent votes
+                    target_id, reasoning = agent.vote_in_meeting(
+                        {'meeting_reason': meeting_reason, 'alive_count': len(agents)},
+                        dialogue_history,
+                        [a.data for a in agents]
+                    )
+                    
+                    target_name = "Skip"
+                    if target_id is not None:
+                        target_agent = next((a for a in agents if a.data.id == target_id), None)
+                        if target_agent:
+                            target_name = target_agent.data.name
+                    
+                    vote = type('Vote', (), {
+                        'voter_id': agent.data.id,
+                        'voter_name': agent.data.name,
+                        'target_id': target_id,
+                        'target_name': target_name,
+                        'vote_time': step_count
+                    })()
+                    
+                    current_votes.append(vote)
+                    print(f"  {agent.data.name} votes for: {target_name} - {reasoning}")
+                    
+                    # Add vote to conversation history as well
+                    vote_statement = Statement(
+                        agent_id=agent.data.id,
+                        agent_name=agent.data.name,
+                        content=f"VOTES FOR {target_name}: {reasoning}",
+                        step_number=step_count,
+                        is_follow_up=True
+                    )
+                    dialogue_history.append(vote_statement)
+                    
+                elif action_type == "speak":
+                    # Agent speaks
+                    context = {
+                        'meeting_reason': meeting_reason,
+                        'alive_count': len(agents),
+                        'current_votes': current_votes
+                    }
+                    statement_content = agent.generate_statement(context, dialogue_history, True)
+                    statement = Statement(
+                        agent_id=agent.data.id,
+                        agent_name=agent.data.name,
+                        content=statement_content,
+                        step_number=step_count,
+                        is_follow_up=True
+                    )
+                    dialogue_history.append(statement)
+                    print(f"  {agent.data.name} (speak): {statement_content}")
+                
+                step_count += 1
+            
+            # Show current vote tally
+            if current_votes:
+                vote_summary = {}
+                for vote in current_votes:
+                    target = vote.target_name
+                    vote_summary[target] = vote_summary.get(target, 0) + 1
+                print(f"\n  Current votes: {', '.join([f'{target}: {count}' for target, count in vote_summary.items()])}")
+        
+        # Phase 3: Ensure everyone votes (if not already)
+        print(f"\n--- FINAL VOTING ---")
+        voted_agents = {vote.voter_id for vote in current_votes}
+        for agent in agents:
+            if agent.data.id not in voted_agents:
+                target_id, reasoning = agent.vote_in_meeting(
+                    {'meeting_reason': meeting_reason, 'alive_count': len(agents)},
+                    dialogue_history,
+                    [a.data for a in agents]
+                )
+                
+                target_name = "Skip"
+                if target_id is not None:
+                    target_agent = next((a for a in agents if a.data.id == target_id), None)
+                    if target_agent:
+                        target_name = target_agent.data.name
+                
+                vote = type('Vote', (), {
+                    'voter_id': agent.data.id,
+                    'voter_name': agent.data.name,
+                    'target_id': target_id,
+                    'target_name': target_name,
+                    'vote_time': step_count
+                })()
+                
+                current_votes.append(vote)
+                print(f"  {agent.data.name} votes for: {target_name} - {reasoning}")
         
         # Phase 4: Process Results
-        print(f"\n--- PHASE 4: PROCESSING RESULTS ---")
-        meeting_result = self._process_voting_results(agents, votes, dialogue_history)
+        print(f"\n--- PROCESSING RESULTS ---")
+        meeting_result = self._process_realtime_voting_results(agents, current_votes, dialogue_history)
         
         # Phase 5: Impostor Kill (if applicable)
         if meeting_result.game_continues and not meeting_result.is_imposter_ejected:
-            print(f"\n--- PHASE 5: IMPOSTOR KILL ---")
+            print(f"\n--- IMPOSTOR KILL ---")
             meeting_result = self._conduct_imposter_kill_phase(agents, meeting_result)
         
         print(f"\n=== MEETING CONCLUDED ===")
@@ -797,6 +980,77 @@ class SupervisorAgent:
                 meeting_result.game_continues = False
         
         return meeting_result
+    
+    def _process_realtime_voting_results(self, agents: List, current_votes: List, dialogue_history: List[Statement]) -> MeetingResult:
+        """Process voting results from real-time voting"""
+        # Count votes
+        vote_counts = {}
+        for vote in current_votes:
+            target_id = vote.target_id if vote.target_id is not None else -1  # -1 for skip
+            vote_counts[target_id] = vote_counts.get(target_id, 0) + 1
+        
+        print(f"  Vote tally: {vote_counts}")
+        
+        # Find the agent with the most votes
+        if not vote_counts:
+            # No votes cast (shouldn't happen with real-time voting)
+            return MeetingResult(
+                ejected_agent_id=None,
+                ejected_agent_name=None,
+                is_imposter_ejected=False,
+                game_continues=True,
+                dialogue_history=dialogue_history,
+                vote_counts=vote_counts
+            )
+        
+        # Get the target with the most votes
+        max_votes = max(vote_counts.values())
+        targets_with_max_votes = [target_id for target_id, count in vote_counts.items() if count == max_votes]
+        
+        # Check for majority (more than half of voters)
+        total_voters = len(current_votes)
+        majority_threshold = total_voters // 2 + 1
+        
+        if max_votes >= majority_threshold and len(targets_with_max_votes) == 1:
+            # Clear majority for one target
+            ejected_id = targets_with_max_votes[0]
+            
+            if ejected_id == -1:  # Skip vote won
+                print(f"  Majority voted to skip. No one is ejected.")
+                return MeetingResult(
+                    ejected_agent_id=None,
+                    ejected_agent_name=None,
+                    is_imposter_ejected=False,
+                    game_continues=True,
+                    dialogue_history=dialogue_history,
+                    vote_counts=vote_counts
+                )
+            else:
+                # Someone is ejected
+                ejected_agent = next((a for a in agents if a.data.id == ejected_id), None)
+                if ejected_agent:
+                    is_imposter = ejected_agent.data.is_impostor
+                    print(f"  {ejected_agent.data.name} is ejected! {'They were the impostor!' if is_imposter else 'They were innocent.'}")
+                    
+                    return MeetingResult(
+                        ejected_agent_id=ejected_id,
+                        ejected_agent_name=ejected_agent.data.name,
+                        is_imposter_ejected=is_imposter,
+                        game_continues=not is_imposter,  # Game ends if impostor ejected
+                        dialogue_history=dialogue_history,
+                        vote_counts=vote_counts
+                    )
+        
+        # No majority reached
+        print(f"  No majority reached. No one is ejected.")
+        return MeetingResult(
+            ejected_agent_id=None,
+            ejected_agent_name=None,
+            is_imposter_ejected=False,
+            game_continues=True,
+            dialogue_history=dialogue_history,
+            vote_counts=vote_counts
+        )
     
     def _build_context_string(self, context: Dict, game_state: GameState) -> str:
         """Build a comprehensive context string from the context dictionary"""

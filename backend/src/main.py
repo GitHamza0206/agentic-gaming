@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from src.features.impostor_game.routes import router as impostor_router
 
-load_dotenv("../.env")  # backend/.env
+load_dotenv()  # Load .env from current directory (backend/.env)
 
 app = FastAPI(
     title="Agentic Gaming API",

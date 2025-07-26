@@ -7,12 +7,16 @@ import time
 class LLMClient:
     def __init__(self):
         # Cerebras setup
-        cerebras_api_key = os.environ.get("CEREBRAS_API_KEY", "csk-wx8vctr5ytdnjc8wkj94tjp4d6ffxxf6p3ppc4jj68xydpe9")
+        cerebras_api_key = os.environ.get("CEREBRAS_API_KEY")
+        if not cerebras_api_key:
+            raise ValueError("CEREBRAS_API_KEY environment variable is required")
         self.cerebras_client = Cerebras(api_key=cerebras_api_key)
         
         # OpenAI setup as fallback
-        self.openai_api_key = "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"
-        self.openai_client = openai.OpenAI(api_key=self.openai_api_key)
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        self.openai_client = openai.OpenAI(api_key=openai_api_key)
         
         # Track usage for debugging
         self.cerebras_calls = 0

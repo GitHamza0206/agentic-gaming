@@ -99,6 +99,15 @@ class AgentTurn(BaseModel):
     think: Optional[str] = None
     speak: Optional[str] = None
     vote: Optional[str] = None
+    action_type: str = "speak"  # "speak", "vote", "think"
+
+class CurrentVoteStatus(BaseModel):
+    """Real-time vote tracking during meeting"""
+    voter_id: int
+    voter_name: str
+    target_id: Optional[int] = None  # None for skip
+    target_name: str = "Skip"
+    vote_time: int  # Step number when vote was cast
 
 class ConversationEntry(BaseModel):
     agent_id: int
@@ -113,6 +122,7 @@ class StepResponse(BaseModel):
     max_steps: int
     turns: List[AgentTurn]
     conversation_history: List[ConversationEntry]
+    current_votes: List[CurrentVoteStatus] = []  # Real-time vote tracking
     eliminated: Optional[str] = None
     winner: Optional[str] = None
     game_over: bool = False

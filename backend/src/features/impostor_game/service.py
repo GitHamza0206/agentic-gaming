@@ -5,7 +5,7 @@ from src.core.llm_client import LLMClient
 from .schema import (
     GameState, Agent, AgentAction, ActionType, GamePhase, GameStatus, MeetingPhase,
     InitGameResponse, StepResponse, GameStateResponse, MeetingTrigger, Statement, Vote, MeetingResult,
-    AgentTurn, ConversationEntry
+    AgentTurn, ConversationEntry, CurrentVoteStatus
 )
 from .agents import Crewmate, Impostor, SupervisorAgent
 
@@ -143,8 +143,8 @@ class ImpostorGameService:
             else:
                 agent_instances.append(Crewmate(agent_data, self.llm_client))
         
-        # Conduct the full meeting using SupervisorAgent
-        meeting_result = self.supervisor.conduct_full_meeting(
+        # Conduct the real-time meeting using SupervisorAgent
+        meeting_result = self.supervisor.conduct_realtime_meeting(
             agent_instances, 
             game.reporter_id, 
             game.meeting_reason
@@ -211,22 +211,56 @@ class ImpostorGameService:
                 agent_id=agent_data.id,
                 think=None,  # Will be populated with agent thoughts
                 speak=None,  # Will be populated with agent speech
-                vote=None    # Will be populated with agent votes
+                vote=None,   # Will be populated with agent votes
+                action_type="speak"  # Default action type
             )
             
             # Find agent's statements in dialogue history
             agent_statements = [s for s in meeting_result.dialogue_history if s.agent_id == agent_data.id]
             if agent_statements:
-                # Use the first statement as the main speech
-                agent_turn.speak = agent_statements[0].content
-                agent_turn.think = f"I need to participate in this emergency meeting about {game.meeting_reason}"
-            
-            # Find agent's vote if any
-            if hasattr(meeting_result, 'vote_counts') and meeting_result.vote_counts:
-                # This is a simplified vote representation
-                agent_turn.vote = None  # Will be set if agent voted
+                # Check if any statement is a vote
+                vote_statements = [s for s in agent_statements if "VOTES FOR" in s.content]
+                speak_statements = [s for s in agent_statements if "VOTES FOR" not in s.content]
+                
+                if vote_statements:
+                    # Agent voted
+                    vote_stmt = vote_statements[0]
+                    agent_turn.vote = vote_stmt.content
+                    agent_turn.action_type = "vote"
+                    agent_turn.think = f"I need to make a strategic vote in this meeting"
+                elif speak_statements:
+                    # Agent spoke
+                    agent_turn.speak = speak_statements[0].content
+                    agent_turn.action_type = "speak"
+                    agent_turn.think = f"I need to participate in this emergency meeting about {game.meeting_reason}"
             
             turns.append(agent_turn)
+        
+        # Create current votes status from meeting result
+        current_votes = []
+        if hasattr(meeting_result, 'vote_counts') and meeting_result.vote_counts:
+            # Extract vote information from dialogue history
+            vote_statements = [s for s in meeting_result.dialogue_history if "VOTES FOR" in s.content]
+            for vote_stmt in vote_statements:
+                # Parse vote target from statement
+                content = vote_stmt.content
+                if "VOTES FOR" in content:
+                    target_part = content.split("VOTES FOR")[1].split(":")[0].strip()
+                    target_id = None
+                    if target_part != "Skip":
+                        # Find target agent by name
+                        target_agent = next((a for a in alive_agents if a.name == target_part), None)
+                        if target_agent:
+                            target_id = target_agent.id
+                    
+                    current_vote = CurrentVoteStatus(
+                        voter_id=vote_stmt.agent_id,
+                        voter_name=vote_stmt.agent_name,
+                        target_id=target_id,
+                        target_name=target_part,
+                        vote_time=vote_stmt.step_number
+                    )
+                    current_votes.append(current_vote)
         
         # Create conversation history from dialogue
         conversation_history = []
@@ -253,6 +287,7 @@ class ImpostorGameService:
             max_steps=game.max_steps,
             turns=turns,
             conversation_history=conversation_history,
+            current_votes=current_votes,
             eliminated=eliminated_name,
             winner=winner,
             game_over=game_over,
