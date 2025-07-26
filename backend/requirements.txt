@@ -1,5 +1,6 @@
 cerebras-cloud-sdk
 python-dotenv
+openai
 
 anyio
 fastapi
