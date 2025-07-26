@@ -193,7 +193,7 @@ class ImpostorGameService:
                         # Get agent's private thoughts
                         private_thoughts = game.private_thoughts.get(agent_data.id, [])
                         
-                        turn = agent.choose_action(context, game.public_action_history, private_thoughts, game.step_number)
+                        turn = agent.choose_action(context, game.public_action_history, private_thoughts, game.step_number, game.agents)
                         step_turns.append(turn)
                         
                         # Process the turn - store think privately
@@ -242,7 +242,7 @@ class ImpostorGameService:
                 # Get agent's private thoughts
                 private_thoughts = game.private_thoughts.get(agent_data.id, [])
                 
-                turn = agent.choose_action(context, game.public_action_history, private_thoughts, game.step_number)
+                turn = agent.choose_action(context, game.public_action_history, private_thoughts, game.step_number, game.agents)
                 step_turns.append(turn)
                 
                 # Process the turn - store think privately

@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ### Environment Setup
 - Create a `.env` file in the backend directory with required environment variables
-- `CEREBRAS_API_KEY` is required for LLM functionality (currently using Cerebras Cloud SDK)
+- `ANTHROPIC_API_KEY` is required for LLM functionality (currently using Anthropic SDK)
 
 ## Architecture Overview
 
@@ -31,7 +31,7 @@ This is an **AI-powered gaming API** built with FastAPI, specifically implementi
 
 **Backend Structure:**
 - `backend/src/main.py` - FastAPI application entry point with CORS middleware
-- `backend/src/core/llm_client.py` - LLM client wrapper using Cerebras Cloud SDK (Qwen-3-235B model)
+- `backend/src/core/llm_client.py` - LLM client wrapper using Anthropic SDK (Claude-3.5-Sonnet model)
 - `backend/src/features/impostor_game/` - Complete impostor game implementation
 
 **Game Architecture:**
@@ -66,6 +66,6 @@ This is an **AI-powered gaming API** built with FastAPI, specifically implementi
 - `GET /impostor-game/health` - Health check
 
 ### Dependencies Note
-- Uses **Cerebras Cloud SDK** for LLM inference (not OpenAI)
+- Uses **Anthropic SDK** for LLM inference with Claude-3.5-Sonnet
 - FastAPI with Pydantic for API structure
 - Environment variables for configuration
