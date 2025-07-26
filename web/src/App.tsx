@@ -71,8 +71,8 @@ const AmongUsSimulation = () => {
         game_over: false,
         message: data.message
       });
-      setPhase('simulation');
-      setCurrentStep(0);
+      setPhase('emergency_meeting');
+      // Keep currentStep at 25, don't reset it
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize game');
     } finally {
@@ -125,9 +125,9 @@ const AmongUsSimulation = () => {
     }
   };
 
-  // Initialize game only when reaching step 25
+  // Initialize game only when reaching step 30
   useEffect(() => {
-    if (currentStep === 25 && !gameData) {
+    if (currentStep === 30 && !gameData) {
       initializeGame();
     }
   }, [currentStep, gameData]);
@@ -192,10 +192,12 @@ const AmongUsSimulation = () => {
         setCurrentStep(prev => {
           const nextStep = prev + 1;
           
-          // At step 25, switch to emergency meeting and start using API
-          if (nextStep === 25) {
-            setPhase('emergency_meeting');
-            // API will be initialized by the other useEffect
+          // At step 30, pause for 2 seconds then switch to emergency meeting
+          if (nextStep === 30) {
+            setTimeout(() => {
+              setPhase('emergency_meeting');
+              // API will be initialized by the other useEffect
+            }, 2000); // 2 second pause
           }
           
           return nextStep;
@@ -203,14 +205,20 @@ const AmongUsSimulation = () => {
       }, 500); // 0.5 seconds for visual simulation
     }
     
-    // For API steps (25+), use different interval
-    if (isPlaying && gameData && currentStep >= 25 && !gameData.game_over) {
-      interval = setInterval(() => {
+    return () => clearInterval(interval);
+  }, [isPlaying, currentStep, phase]);
+
+  // Separate useEffect for API steps (30+) - Run steps until max_steps (30 total)
+  useEffect(() => {
+    let timeout;
+    if (isPlaying && gameData && currentStep >= 30 && !gameData.game_over && phase === 'emergency_meeting' && gameData.step_number < gameData.max_steps) {
+      // Launch next step automatically after receiving response, with a small delay for reading
+      timeout = setTimeout(() => {
         stepGame();
-      }, 2000); // 2 seconds for API calls
+      }, 2000); // 2 seconds delay for reading messages
     }
     
-    return () => clearInterval(interval);
+    return () => clearTimeout(timeout);
   }, [isPlaying, currentStep, gameData, phase]);
 
   const resetSimulation = () => {
@@ -258,7 +266,7 @@ const AmongUsSimulation = () => {
         <div className="bg-gray-900 rounded-xl shadow-2xl border-2 border-cyan-400 p-4 flex-1 flex flex-col overflow-hidden"
              style={{background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'}}>
         {/* Loading State */}
-        {loading && (
+        {loading && phase === 'simulation' && (
           <div className="text-center py-6">
             <div className="inline-block w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
             <div className="text-lg text-cyan-300 mt-2 font-bold">Loading Crewmates...</div>
@@ -627,7 +635,7 @@ const AmongUsSimulation = () => {
                       <p className="text-xs text-cyan-200">AI Agents are sharing their observations and suspicions</p>
                     </div>
                   </div>
-                  <div className="p-2 space-y-2 flex-1 overflow-y-auto bg-gradient-to-b from-gray-800 to-gray-900">
+                  <div className="p-2 space-y-2 flex-1 overflow-y-auto bg-gradient-to-b from-gray-800 to-gray-900" style={{scrollbarWidth: 'thin', scrollbarColor: '#06b6d4 #374151'}}>
                 {gameData.conversation_history
                   .filter(action => action.action_type === 'speak')
                   .map((action, index) => {
