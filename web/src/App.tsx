@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 
 interface Agent {
@@ -41,6 +41,7 @@ const AmongUsSimulation = () => {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // API Configuration
   const API_BASE = 'http://localhost:8000';
@@ -62,17 +63,19 @@ const AmongUsSimulation = () => {
       }
       
       const data = await response.json();
-      setGameData({
+      const initialGameData = {
         game_id: data.game_id,
         agents: data.agents,
         conversation_history: [],
-        step_number: 0,
+        step_number: 1, // Start at step 1
         max_steps: 30,
         game_over: false,
         message: data.message
-      });
+      };
+      
+      console.log('Setting initial game data:', initialGameData);
+      setGameData(initialGameData);
       setPhase('emergency_meeting');
-      // Keep currentStep at 25, don't reset it
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize game');
     } finally {
@@ -98,23 +101,21 @@ const AmongUsSimulation = () => {
       }
       
       const data = await response.json();
-      setGameData({
-        ...gameData,
-        conversation_history: data.conversation_history,
+      console.log('stepGame response:', data);
+      
+      // Update game data with new information - accumulate conversation history
+      setGameData(prevGameData => ({
+        ...prevGameData!,
+        conversation_history: data.conversation_history || prevGameData!.conversation_history,
         step_number: data.step_number,
-        game_over: data.game_over,
+        game_over: data.game_over || false,
         winner: data.winner,
-        message: data.message
-      });
+        message: data.message || 'Step completed'
+      }));
       
-      setCurrentStep(data.step_number);
-      
-      // Switch to emergency meeting phase at step 25
-      if (data.step_number >= 25) {
-        setPhase('emergency_meeting');
-      }
-      
-      if (data.game_over || data.step_number >= 30) {
+      // Check if game should end
+      if (data.game_over) {
+        console.log('Game ended:', { game_over: data.game_over, winner: data.winner });
         setIsPlaying(false);
       }
     } catch (err) {
@@ -125,12 +126,13 @@ const AmongUsSimulation = () => {
     }
   };
 
-  // Initialize game only when reaching step 30
+  // Initialize game when reaching step 30
   useEffect(() => {
-    if (currentStep === 30 && !gameData) {
+    if (currentStep === 30 && !gameData && phase === 'emergency_meeting') {
+      console.log('Initializing game at step 30...');
       initializeGame();
     }
-  }, [currentStep, gameData]);
+  }, [currentStep, gameData, phase]);
 
   // Game Master Scenario Data (keeping for visual simulation)
   const gameScenario = [
@@ -208,18 +210,57 @@ const AmongUsSimulation = () => {
     return () => clearInterval(interval);
   }, [isPlaying, currentStep, phase]);
 
-  // Separate useEffect for API steps (30+) - Run steps until max_steps (30 total)
+  // Auto-step through API calls during emergency meeting
   useEffect(() => {
-    let timeout;
-    if (isPlaying && gameData && currentStep >= 30 && !gameData.game_over && phase === 'emergency_meeting' && gameData.step_number < gameData.max_steps) {
-      // Launch next step automatically after receiving response, with a small delay for reading
+    console.log('Auto-step useEffect triggered:', {
+      isPlaying,
+      gameData: gameData ? {
+        step_number: gameData.step_number,
+        max_steps: gameData.max_steps,
+        game_over: gameData.game_over
+      } : null,
+      currentStep,
+      phase,
+      loading
+    });
+    
+    let timeout: NodeJS.Timeout;
+    
+    // Only auto-step if we're in emergency meeting, playing, have game data, not loading, and game isn't over
+    if (isPlaying && 
+        gameData && 
+        phase === 'emergency_meeting' && 
+        !loading && 
+        !gameData.game_over && 
+        gameData.step_number < gameData.max_steps) {
+      
+      console.log('Scheduling next API call in 3 seconds...');
       timeout = setTimeout(() => {
+        console.log('Calling stepGame()...');
         stepGame();
-      }, 2000); // 2 seconds delay for reading messages
+      }, 3000); // 3 seconds delay for reading messages
+    } else {
+      console.log('Auto-step conditions not met:', {
+        isPlaying,
+        hasGameData: !!gameData,
+        isEmergencyMeeting: phase === 'emergency_meeting',
+        notLoading: !loading,
+        notGameOver: gameData ? !gameData.game_over : 'no gameData',
+        stepLessThanMax: gameData ? gameData.step_number < gameData.max_steps : 'no gameData'
+      });
     }
     
-    return () => clearTimeout(timeout);
-  }, [isPlaying, currentStep, gameData, phase]);
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [isPlaying, gameData?.step_number, gameData?.game_over, phase, loading]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatContainerRef.current && gameData?.conversation_history) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [gameData?.conversation_history?.length]);
 
   const resetSimulation = () => {
     setCurrentStep(0);
@@ -635,7 +676,15 @@ const AmongUsSimulation = () => {
                       <p className="text-xs text-cyan-200">AI Agents are sharing their observations and suspicions</p>
                     </div>
                   </div>
-                  <div className="p-2 space-y-2 flex-1 overflow-y-auto bg-gradient-to-b from-gray-800 to-gray-900" style={{scrollbarWidth: 'thin', scrollbarColor: '#06b6d4 #374151'}}>
+                  <div 
+                    ref={chatContainerRef}
+                    className="p-2 space-y-2 flex-1 overflow-y-auto bg-gradient-to-b from-gray-800 to-gray-900 scrollbar-thin scrollbar-track-gray-700 scrollbar-thumb-cyan-400 hover:scrollbar-thumb-cyan-300"
+                    style={{
+                      scrollbarWidth: 'thin', 
+                      scrollbarColor: '#06b6d4 #374151',
+                      maxHeight: 'calc(100vh - 300px)' // Ensure it has a maximum height
+                    }}
+                  >
                 {gameData.conversation_history
                   .filter(action => action.action_type === 'speak')
                   .map((action, index) => {
