@@ -308,25 +308,38 @@ const AmongUsSimulation = () => {
           <div className="space-y-4">
             {/* Memory Access Controls */}
             <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-lg font-bold mb-3">Memory Access Control</h3>
-              {Object.entries(agentColors).map(([agentId, color]) => (
-                <div key={agentId} className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id={`memory-${agentId}`}
-                    checked={memoryAccess[agentId]}
-                    onChange={() => toggleMemoryAccess(agentId)}
-                    className="w-4 h-4"
-                  />
-                  <label htmlFor={`memory-${agentId}`} className="flex items-center gap-2">
-                    <div
-                      className="w-4 h-4 rounded-full border"
-                      style={{backgroundColor: color}}
+              <h3 className="text-lg font-bold mb-3">
+                Memory Access Control
+                {currentStep > 0 && (
+                  <span className="text-sm font-normal text-gray-600 ml-2">(locked during game)</span>
+                )}
+              </h3>
+              <div className="flex flex-wrap gap-4">
+                {Object.entries(agentColors).map(([agentId, color]) => (
+                  <div key={agentId} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id={`memory-${agentId}`}
+                      checked={memoryAccess[agentId]}
+                      onChange={() => toggleMemoryAccess(agentId)}
+                      disabled={currentStep > 0}
+                      className="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    {agentId} {agentId === 'yellow' ? '(impostor)' : ''}
-                  </label>
-                </div>
-              ))}
+                    <label 
+                      htmlFor={`memory-${agentId}`} 
+                      className={`flex items-center gap-2 ${currentStep > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <div
+                        className="w-4 h-4 rounded-full border"
+                        style={{backgroundColor: color}}
+                      />
+                      <span className="text-sm font-medium">
+                        {agentId} {agentId === 'yellow' ? '(impostor)' : ''}
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Current Step Info */}
