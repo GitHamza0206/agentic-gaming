@@ -10,26 +10,22 @@ class Crewmate:
         self.llm_client = llm_client
     
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), a CREWMATE on this spaceship. You are currently in an EMERGENCY MEETING discussing who the impostor is. Someone found a dead body, so now everyone is gathered at the meeting table to debate and vote. Your goal is to find the impostor before they eliminate everyone. Share what you saw, analyze others' stories for inconsistencies, and vote to eliminate the impostor."
+        return f"You are {self.data.name} ({self.data.color}), a CREWMATE detective. A dead body has been found and you're now investigating the murder to identify the impostor. Your goal is to analyze alibis, establish timelines, and deduce who had the opportunity to commit the murder. Each discussion turn, you must form and share your hypothesis about who the impostor is, gather evidence to support or refute theories, and work toward eliminating the killer."
     
     async def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         system_prompt = self.get_role_description()
         
-        # Create agent ID to name mapping
-        agent_names = {}
-        if all_agents:
-            for agent in all_agents:
-                agent_names[agent.id] = agent.name
-        
         # Format public chat history (what everyone can see)
         public_chat = []
+        print(f"DEBUG - {self.data.color} sees {len(public_action_history)} conversation messages")
         for action in public_action_history[-15:]:
-            agent_name = agent_names.get(action.agent_id, f"Agent{action.agent_id}")
-            action_text = f"{agent_name} {action.action_type.value}: {action.content}"
+            # agent_id is now the color directly
+            agent_color = action.agent_id
+            action_text = f"{agent_color} {action.action_type.value}: {action.content}"
             if action.target_agent_id is not None:
-                target_name = agent_names.get(action.target_agent_id, f"Agent{action.target_agent_id}")
-                action_text += f" (targeting {target_name})"
+                action_text += f" (targeting {action.target_agent_id})"
             public_chat.append(action_text)
+            print(f"DEBUG - Conversation: {action_text}")
         
         # Format private thoughts (only this agent's thoughts)
         private_chat = []
@@ -48,11 +44,11 @@ class Crewmate:
             alive_agents = [agent for agent in all_agents if agent.is_alive]
             dead_agents = [agent for agent in all_agents if not agent.is_alive]
             
-            alive_list = [f"{agent.name} ({agent.color})" for agent in alive_agents]
-            meeting_info = f"MEETING PARTICIPANTS: {', '.join(alive_list)} are present in this emergency meeting."
+            alive_list = [agent.color for agent in alive_agents]
+            meeting_info = f"MEETING PARTICIPANTS: {', '.join(alive_list)} are present in this investigation."
             
             if dead_agents:
-                dead_list = [f"{agent.name} ({agent.color})" for agent in dead_agents]
+                dead_list = [agent.color for agent in dead_agents]
                 meeting_info += f" ELIMINATED: {', '.join(dead_list)} have been eliminated and are not in the meeting."
             
             meeting_info += f" Total alive: {len(alive_agents)}/8 players remaining."
@@ -61,28 +57,47 @@ class Crewmate:
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": f"Game context: {context}"},
             {"role": "system", "content": f"Your memory from previous steps:\\n{memory_context} \\n{meeting_info}"},
-            {"role": "system", "content": f"Public discussion (everyone can see):\\n{public_context}"},
+            {"role": "system", "content": f"RECENT CONVERSATION (READ CAREFULLY - others may have asked you questions!):\\n{public_context}"},
             {"role": "system", "content": f"Your private thoughts (only you can see):\\n{private_context}"},
-            {"role": "user", "content": f"""You are currently in an EMERGENCY MEETING at the meeting table discussing who the impostor is. Respond in JSON format for this discussion turn.
+            {"role": "user", "content": f"""MURDER INVESTIGATION: A dead body has been found and you're investigating to identify the impostor. This is your detective analysis turn.
 
-WHAT YOU WERE DOING BEFORE THE MEETING: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
+YOU ARE: {self.data.color} ({self.data.name})
+YOUR ALIBI: You were in {self.data.location} doing '{self.data.action}' and you encountered: {', '.join(self.data.met) if self.data.met else 'no one'}
+
+CONVERSATION ANALYSIS (CRITICAL - READ THE RECENT CONVERSATION ABOVE):
+- Scan the RECENT CONVERSATION for your color name ({self.data.color}) - were you directly questioned?
+- Did someone say "{self.data.color}, [question]" or accuse you of something?
+- If YES: Your response MUST address that question/accusation first
+- If NO direct questions: Then share your alibi or ask new questions
+
+INVESTIGATION PRIORITIES:
+1. FIRST: Answer any direct questions asked to you by name/color
+2. THEN: Share your alibi and observations  
+3. THEN: Question others about suspicious behavior
+4. ALWAYS: State who you currently suspect and why
+
+IMPORTANT: 
+- Remember you are {self.data.color} - don't question yourself!
+- Be responsive to the conversation - answer before asking new questions
+- If accused, defend yourself with facts about your alibi
 
 """ + """{
-  "think": "your private analysis of the situation and other players (always required)",
-  "speak": "what you say to the group about what you observed or your suspicions (optional, null if silent)",
-  "vote": agent_ID_number (optional, null if you don't vote),
+  "think": "your detective analysis - alibis, timelines, opportunity, evidence (always required)",
+  "speak": "what you tell the group - share your alibi, question others, or present theories (optional, null if silent)",
+  "impostor_hypothesis": "color of agent you currently suspect as the impostor (red, blue, green, or yellow)",
+  "vote": "color of agent to eliminate (red, blue, green, yellow) or null if you don't vote this turn"
 }
 
 Examples:
-{"think": "Red's story doesn't match what I saw - they claim they were alone but I saw them with Blue", "speak": "I was doing navigation tasks and saw Red and Blue together in Electrical", "vote": null}
-{"think": "Yellow's timeline is suspicious, they're probably the impostor", "speak": "Yellow, you said you were in Cafeteria but the body was found in Electrical", "vote": 3}
+{"think": "Someone just asked me about my card swipe task. I need to explain that I was actually doing it properly and wasn't faking it.", "speak": "Blue, you asked about my card swipe - I was having trouble with the reader, that's why it took multiple attempts. I can confirm I was in Cafeteria the whole time with you, red, and green.", "impostor_hypothesis": "yellow", "vote": null}
+{"think": "No one questioned me directly, so I can share my observations. Yellow's behavior seemed suspicious when they were near the exit.", "speak": "I was doing wires in Cafeteria with everyone. Yellow, I noticed you near the exit several times - did you leave at any point?", "impostor_hypothesis": "yellow", "vote": null}
 
-IMPORTANT: 
-- This is a DISCUSSION about what happened BEFORE the meeting
-- Share what you observed and analyze others' stories for contradictions
-- "think" = your private analysis (always required)
-- "speak" = what you tell the group (optional)
-- "vote" = agent ID to eliminate (optional)
+CRITICAL REQUIREMENTS:
+- CHECK: Did someone ask YOU a direct question? Answer it first!
+- CHECK: Were YOU accused of something? Defend yourself with your alibi!
+- You MUST always have an "impostor_hypothesis" - your current best guess
+- Build on the conversation - don't ignore what others just said
+- Focus on WHO HAD OPPORTUNITY to commit the murder
 - Respond with valid JSON only!"""}
         ]
         
@@ -123,6 +138,7 @@ IMPORTANT:
                 think = data.get("think", "")
                 speak = data.get("speak")
                 vote = data.get("vote")
+                impostor_hypothesis = data.get("impostor_hypothesis")
                 
                 # Ensure think is not empty
                 if not think:
@@ -132,14 +148,27 @@ IMPORTANT:
                 if speak == "null" or speak == "":
                     speak = None
                     
-                # Convert vote null to None and validate
+                # Convert vote null to None and validate color
                 if vote == "null" or vote == "":
                     vote = None
                 elif vote is not None:
-                    try:
-                        vote = int(vote)
-                    except (ValueError, TypeError):
+                    # Validate it's a valid color
+                    valid_colors = ["red", "blue", "green", "yellow"]
+                    if isinstance(vote, str) and vote.lower() in valid_colors:
+                        vote = vote.lower()
+                    else:
                         vote = None
+                
+                # Convert impostor_hypothesis null to None and validate color
+                if impostor_hypothesis == "null" or impostor_hypothesis == "":
+                    impostor_hypothesis = None
+                elif impostor_hypothesis is not None:
+                    # Validate it's a valid color
+                    valid_colors = ["red", "blue", "green", "yellow"]
+                    if isinstance(impostor_hypothesis, str) and impostor_hypothesis.lower() in valid_colors:
+                        impostor_hypothesis = impostor_hypothesis.lower()
+                    else:
+                        impostor_hypothesis = None
                 
                 # Create simple memory update based on current data
                 memory_update = AgentMemory(
@@ -154,6 +183,7 @@ IMPORTANT:
                     think=think,
                     speak=speak,
                     vote=vote,
+                    impostor_hypothesis=impostor_hypothesis,
                     memory_update=memory_update
                 )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -167,11 +197,20 @@ IMPORTANT:
         
         # Look for voting patterns
         if "vote" in response_lower or "accuse" in response_lower:
-            numbers = re.findall(r'\\d+', response)
-            if numbers:
-                vote_target = int(numbers[0])
-                # Extract a short statement for speaking
-                speak_content = f"I vote for Agent{numbers[0]}"
+            # Look for color names in the response
+            valid_colors = ["red", "blue", "green", "yellow"]
+            found_color = None
+            for color in valid_colors:
+                if color in response_lower:
+                    found_color = color
+                    vote_target = color
+                    break
+            
+            if found_color:
+                speak_content = f"I vote for {found_color}"
+            else:
+                # Fallback: no clear color found
+                speak_content = "I'm still analyzing the evidence"
         elif "say" in response_lower or "speak" in response_lower or "tell" in response_lower:
             # Extract a short speaking statement
             speak_content = response.strip()[:80] + "..." if len(response.strip()) > 80 else response.strip()
@@ -189,12 +228,13 @@ IMPORTANT:
             think=think_content,
             speak=speak_content,
             vote=vote_target,
+            impostor_hypothesis=None,  # No hypothesis in fallback case
             memory_update=default_memory
         )
 
 class Impostor(Crewmate):
     def get_role_description(self) -> str:
-        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR on this spaceship. You are currently in an EMERGENCY MEETING at the meeting table. Someone found a dead body and now everyone is discussing who the impostor is. Your goal is to avoid being discovered and eliminated. Act like an innocent crewmate, provide believable alibis, deflect suspicion toward others, and never reveal that you are the impostor. Be strategic and convincing."
+        return f"You are {self.data.name} ({self.data.color}), the IMPOSTOR who committed the murder. You're now being investigated by the other crewmates who are trying to identify you. Your goal is to avoid detection and elimination. Provide convincing alibis, act innocent, deflect suspicion toward innocent crewmates, and create doubt about others. When forced to give an impostor hypothesis, accuse someone else strategically. Never reveal your true identity."
     
     async def choose_action(self, context: str, public_action_history: List[AgentAction], private_thoughts: List[AgentAction], step_number: int, all_agents: List[Agent] = None) -> AgentTurn:
         # Impostors might be more strategic in their actions
