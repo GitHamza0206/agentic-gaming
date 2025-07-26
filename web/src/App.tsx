@@ -157,36 +157,42 @@ const AmongUsSimulation = () => {
   return (
     <div className="w-full max-w-6xl mx-auto p-4 bg-gray-100 min-h-screen">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-3xl font-bold text-center mb-6">Among Us Multi-Agent AI Simulation</h1>
-        
-        {/* Controls */}
-        <div className="flex justify-center items-center gap-4 mb-6">
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className={`flex items-center gap-2 px-4 py-2 rounded ${
-              isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-            } text-white`}
-            disabled={phase === 'emergency_meeting'}
-          >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-          
-          <button
-            onClick={resetSimulation}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
-          >
-            <RotateCcw size={16} />
-            Reset
-          </button>
-          
-          <div className="text-lg font-semibold">
-            Step: {currentStep}/30 | Phase: {phase === 'simulation' ? 'Simulation' : 'Emergency Meeting'}
-          </div>
-        </div>
+        {/* Header and Controls - Hidden during emergency meeting */}
+        {phase === 'simulation' && (
+          <>
+            <h1 className="text-3xl font-bold text-center mb-6">Among Us Multi-Agent AI Simulation</h1>
+            
+            {/* Controls */}
+            <div className="flex justify-center items-center gap-4 mb-6">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`flex items-center gap-2 px-4 py-2 rounded ${
+                  isPlaying ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+                } text-white`}
+                disabled={phase === 'emergency_meeting'}
+              >
+                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+              
+              <button
+                onClick={resetSimulation}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+              >
+                <RotateCcw size={16} />
+                Reset
+              </button>
+              
+              <div className="text-lg font-semibold">
+                Step: {currentStep}/30 | Phase: {phase === 'simulation' ? 'Simulation' : 'Emergency Meeting'}
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Game Map */}
+            {/* Game Map - Hidden during emergency meeting */}
+            {phase === 'simulation' && (
             <div className="lg:col-span-2">
               <div className="bg-gray-800 rounded-lg p-4 relative" style={{height: '500px'}}>
                 <h3 className="text-white text-xl mb-4">Game Map</h3>
@@ -303,8 +309,10 @@ const AmongUsSimulation = () => {
               })}
             </div>
           </div>
+          )}
 
-          {/* Control Panel */}
+          {/* Control Panel - Hidden during emergency meeting */}
+          {phase === 'simulation' && (
           <div className="space-y-4">
             {/* Memory Access Controls */}
             <div className="bg-gray-50 rounded-lg p-4">
@@ -360,6 +368,7 @@ const AmongUsSimulation = () => {
               ))}
             </div>
           </div>
+          )}
         </div>
 
         {/* Emergency Meeting Panel - Below Map */}
